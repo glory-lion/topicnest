@@ -2,21 +2,32 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { getOrCreateUser } from '@/lib/api';
 
 export default function LandingPage() {
   const [username, setUsername] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
   const router = useRouter();
 
-  const handleEnterForum = (e: React.FormEvent) => {
+  const handleEnterForum = async (e: React.FormEvent) => {
     e.preventDefault();
     if (username.trim()) {
       setIsLoading(true);
-      localStorage.setItem('topicnest_user', username);
-      console.log("HELLO");
-      setTimeout(() => {
-        router.push('/forum');
-      }, 500);
+      setError('');
+
+      try {
+        const user = await getOrCreateUser(username.trim());
+        if (user) {
+          localStorage.setItem('topicnest_user', username.trim());
+          localStorage.setItem('topicnest_user_id', user.id);
+          router.push('/forum');
+        }
+      } catch (err) {
+        console.error('Login error:', err);
+        setError('Failed to login. Please try again.');
+        setIsLoading(false);
+      }
     }
   };
 
@@ -74,10 +85,11 @@ export default function LandingPage() {
               background: 'linear-gradient(135deg, #7c3aed 0%, #8b5cf6 100%)',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text'
+              backgroundClip: 'text',
+              paddingRight: '6px'
             }}
           >
-            Topic<em style={{ fontStyle: 'italic' }}>Nest</em>
+            Topic<em style={{ fontStyle: 'italic', paddingRight: '2px' }}>Nest</em>
           </span>
         </div>
 

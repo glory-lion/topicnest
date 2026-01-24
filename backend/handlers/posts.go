@@ -1,405 +1,324 @@
 package handlers
 
 import (
-	"database/sql"
 	"encoding/json"
 	"net/http"
-	"strconv"
+	"strings"
 
 	"topicnest-backend/db"
-	"topicnest-backend/middleware"
 	"topicnest-backend/models"
 
 	"github.com/gorilla/mux"
 )
 
-// GetPosts returns posts with optional filtering
+// GetPosts returns all posts
 func GetPosts(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+	categoryID := r.URL.Query().Get("category_id")
 
-	// Get query params
-	communityName := r.URL.Query().Get("community")
-	limitStr := r.URL.Query().Get("limit")
-
-	limit := 20
-	if limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 100 {
-			limit = l
-		}
-	}
-
-	// Build query
-	query := `
-		SELECT p.id, p.title, p.content, p.image_url, p.upvotes, p.downvotes, 
-			   p.comment_count, p.is_oc, p.created_at,
-			   u.id, u.username, u.karma, u.created_at,
-			   c.id, c.name, c.display_name, c.description, c.members, c.created_at
-		FROM posts p
-		JOIN users u ON p.author_id = u.id
-		JOIN communities c ON p.community_id = c.id
-	`
-
+	var query string
 	var args []interface{}
-	if communityName != "" {
-		query += " WHERE c.name = $1"
-		args = append(args, communityName)
-	}
 
-	query += " ORDER BY p.created_at DESC LIMIT $" + strconv.Itoa(len(args)+1)
-	args = append(args, limit)
+	if categoryID != "" {
+		query = `
+			SELECT p.id, p.title, p.content, p.image_url, p.category_id, p.user_id, p.upvotes, p.created_at, p.updated_at,
+				   u.id, u.username, u.bio, u.avatar_url, u.created_at,
+				   c.id, c.name, c.slug, c.description, c.icon, c.gradient, c.glow_color, c.created_at,
+				   (SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comment_count
+			FROM posts p
+			LEFT JOIN users u ON p.user_id = u.id
+			LEFT JOIN categories c ON p.category_id = c.id
+			WHERE p.category_id = $1
+			ORDER BY p.created_at DESC
+		`
+		args = append(args, categoryID)
+	} else {
+		query = `
+			SELECT p.id, p.title, p.content, p.image_url, p.category_id, p.user_id, p.upvotes, p.created_at, p.updated_at,
+				   u.id, u.username, u.bio, u.avatar_url, u.created_at,
+				   c.id, c.name, c.slug, c.description, c.icon, c.gradient, c.glow_color, c.created_at,
+				   (SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comment_count
+			FROM posts p
+			LEFT JOIN users u ON p.user_id = u.id
+			LEFT JOIN categories c ON p.category_id = c.id
+			ORDER BY p.created_at DESC
+		`
+	}
 
 	rows, err := db.DB.Query(query, args...)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(models.APIResponse{Success: false, Error: "Database error"})
+		respondError(w, http.StatusInternalServerError, "Failed to fetch posts")
 		return
 	}
 	defer rows.Close()
 
-	user := middleware.GetUserFromContext(r)
-	posts := []models.Post{}
+	posts := scanPosts(rows)
+	respondJSON(w, http.StatusOK, posts)
+}
 
+// GetPostsByCategory returns posts by category slug
+func GetPostsByCategory(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	slug := vars["slug"]
+
+	rows, err := db.DB.Query(`
+		SELECT p.id, p.title, p.content, p.image_url, p.category_id, p.user_id, p.upvotes, p.created_at, p.updated_at,
+			   u.id, u.username, u.bio, u.avatar_url, u.created_at,
+			   c.id, c.name, c.slug, c.description, c.icon, c.gradient, c.glow_color, c.created_at,
+			   (SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comment_count
+		FROM posts p
+		LEFT JOIN users u ON p.user_id = u.id
+		LEFT JOIN categories c ON p.category_id = c.id
+		WHERE c.slug = $1
+		ORDER BY p.created_at DESC
+	`, slug)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to fetch posts")
+		return
+	}
+	defer rows.Close()
+
+	posts := scanPosts(rows)
+	respondJSON(w, http.StatusOK, posts)
+}
+
+// GetPostsByUser returns posts by user ID
+func GetPostsByUser(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	userID := vars["id"]
+
+	rows, err := db.DB.Query(`
+		SELECT p.id, p.title, p.content, p.image_url, p.category_id, p.user_id, p.upvotes, p.created_at, p.updated_at,
+			   u.id, u.username, u.bio, u.avatar_url, u.created_at,
+			   c.id, c.name, c.slug, c.description, c.icon, c.gradient, c.glow_color, c.created_at,
+			   (SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comment_count
+		FROM posts p
+		LEFT JOIN users u ON p.user_id = u.id
+		LEFT JOIN categories c ON p.category_id = c.id
+		WHERE p.user_id = $1
+		ORDER BY p.created_at DESC
+	`, userID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to fetch posts")
+		return
+	}
+	defer rows.Close()
+
+	posts := scanPosts(rows)
+	respondJSON(w, http.StatusOK, posts)
+}
+
+// GetPost returns a single post by ID
+func GetPost(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	postID := vars["id"]
+
+	var post models.Post
+	var author models.User
+	var category models.Category
+
+	err := db.DB.QueryRow(`
+		SELECT p.id, p.title, p.content, p.image_url, p.category_id, p.user_id, p.upvotes, p.created_at, p.updated_at,
+			   u.id, u.username, u.bio, u.avatar_url, u.created_at,
+			   c.id, c.name, c.slug, c.description, c.icon, c.gradient, c.glow_color, c.created_at,
+			   (SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comment_count
+		FROM posts p
+		LEFT JOIN users u ON p.user_id = u.id
+		LEFT JOIN categories c ON p.category_id = c.id
+		WHERE p.id = $1
+	`, postID).Scan(
+		&post.ID, &post.Title, &post.Content, &post.ImageURL, &post.CategoryID, &post.UserID, &post.Upvotes, &post.CreatedAt, &post.UpdatedAt,
+		&author.ID, &author.Username, &author.Bio, &author.AvatarURL, &author.CreatedAt,
+		&category.ID, &category.Name, &category.Slug, &category.Description, &category.Icon, &category.Gradient, &category.GlowColor, &category.CreatedAt,
+		&post.CommentCount,
+	)
+	if err != nil {
+		respondError(w, http.StatusNotFound, "Post not found")
+		return
+	}
+
+	post.Author = &author
+	post.Category = &category
+	// Set legacy fields for frontend compatibility
+	post.Users = &author
+	post.Categories = &category
+
+	respondJSON(w, http.StatusOK, post)
+}
+
+// CreatePost creates a new post
+func CreatePost(w http.ResponseWriter, r *http.Request) {
+	// Get user_id from context (set by AuthMiddleware)
+	val := r.Context().Value("user_id")
+	if val == nil {
+		respondError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+	userID := val.(string)
+
+	var req models.CreatePostRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if req.Title == "" || req.Content == "" || req.CategoryID == "" {
+		respondError(w, http.StatusBadRequest, "Title, content, and category_id are required")
+		return
+	}
+
+	var post models.Post
+	err := db.DB.QueryRow(`
+		INSERT INTO posts (title, content, image_url, category_id, user_id)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING id, title, content, image_url, category_id, user_id, upvotes, created_at, updated_at
+	`, req.Title, req.Content, req.ImageURL, req.CategoryID, userID).Scan(
+		&post.ID, &post.Title, &post.Content, &post.ImageURL, &post.CategoryID, &post.UserID, &post.Upvotes, &post.CreatedAt, &post.UpdatedAt,
+	)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to create post: "+err.Error())
+		return
+	}
+
+	respondJSON(w, http.StatusCreated, post)
+}
+
+// UpdatePost updates an existing post
+func UpdatePost(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	postID := vars["id"]
+
+	var req models.UpdatePostRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	_, err := db.DB.Exec(`
+		UPDATE posts SET title = $1, content = $2, image_url = $3, updated_at = NOW()
+		WHERE id = $4
+	`, req.Title, req.Content, req.ImageURL, postID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to update post")
+		return
+	}
+
+	// Fetch updated post
+	var post models.Post
+	err = db.DB.QueryRow(`
+		SELECT id, title, content, image_url, category_id, user_id, upvotes, created_at, updated_at
+		FROM posts WHERE id = $1
+	`, postID).Scan(&post.ID, &post.Title, &post.Content, &post.ImageURL, &post.CategoryID, &post.UserID, &post.Upvotes, &post.CreatedAt, &post.UpdatedAt)
+	if err != nil {
+		respondError(w, http.StatusNotFound, "Post not found")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, post)
+}
+
+// DeletePost deletes a post
+func DeletePost(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	postID := vars["id"]
+
+	result, err := db.DB.Exec("DELETE FROM posts WHERE id = $1", postID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to delete post")
+		return
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		respondError(w, http.StatusNotFound, "Post not found")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]string{"message": "Post deleted successfully"})
+}
+
+// UpvotePost upvotes a post
+func UpvotePost(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	postID := vars["id"]
+
+	var post models.Post
+	err := db.DB.QueryRow(`
+		UPDATE posts SET upvotes = upvotes + 1 WHERE id = $1
+		RETURNING id, title, content, image_url, category_id, user_id, upvotes, created_at, updated_at
+	`, postID).Scan(&post.ID, &post.Title, &post.Content, &post.ImageURL, &post.CategoryID, &post.UserID, &post.Upvotes, &post.CreatedAt, &post.UpdatedAt)
+	if err != nil {
+		respondError(w, http.StatusNotFound, "Post not found")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, post)
+}
+
+// SearchPosts searches posts by query
+func SearchPosts(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query().Get("q")
+	if query == "" {
+		respondJSON(w, http.StatusOK, []models.Post{})
+		return
+	}
+
+	searchQuery := "%" + strings.ToLower(query) + "%"
+
+	rows, err := db.DB.Query(`
+		SELECT p.id, p.title, p.content, p.image_url, p.category_id, p.user_id, p.upvotes, p.created_at, p.updated_at,
+			   u.id, u.username, u.bio, u.avatar_url, u.created_at,
+			   c.id, c.name, c.slug, c.description, c.icon, c.gradient, c.glow_color, c.created_at,
+			   (SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comment_count
+		FROM posts p
+		LEFT JOIN users u ON p.user_id = u.id
+		LEFT JOIN categories c ON p.category_id = c.id
+		WHERE LOWER(p.title) LIKE $1 
+		   OR LOWER(p.content) LIKE $1
+		   OR LOWER(c.name) LIKE $1
+		   OR LOWER(u.username) LIKE $1
+		ORDER BY p.created_at DESC
+	`, searchQuery)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to search posts")
+		return
+	}
+	defer rows.Close()
+
+	posts := scanPosts(rows)
+	respondJSON(w, http.StatusOK, posts)
+}
+
+// Helper function to scan posts from rows
+func scanPosts(rows interface {
+	Next() bool
+	Scan(...interface{}) error
+}) []models.Post {
+	var posts []models.Post
 	for rows.Next() {
-		var p models.Post
+		var post models.Post
 		var author models.User
-		var community models.Community
-		var content, imageURL sql.NullString
+		var category models.Category
 
 		err := rows.Scan(
-			&p.ID, &p.Title, &content, &imageURL, &p.Upvotes, &p.Downvotes,
-			&p.CommentCount, &p.IsOC, &p.CreatedAt,
-			&author.ID, &author.Username, &author.Karma, &author.CreatedAt,
-			&community.ID, &community.Name, &community.DisplayName, &community.Description, &community.Members, &community.CreatedAt,
+			&post.ID, &post.Title, &post.Content, &post.ImageURL, &post.CategoryID, &post.UserID, &post.Upvotes, &post.CreatedAt, &post.UpdatedAt,
+			&author.ID, &author.Username, &author.Bio, &author.AvatarURL, &author.CreatedAt,
+			&category.ID, &category.Name, &category.Slug, &category.Description, &category.Icon, &category.Gradient, &category.GlowColor, &category.CreatedAt,
+			&post.CommentCount,
 		)
 		if err != nil {
 			continue
 		}
 
-		p.Content = content.String
-		p.ImageURL = imageURL.String
-		p.Author = &author
-		p.Community = &community
-
-		// Get user's vote if authenticated
-		if user != nil {
-			var voteType string
-			err := db.DB.QueryRow(`
-				SELECT vote_type FROM votes WHERE user_id = $1 AND post_id = $2
-			`, user.ID, p.ID).Scan(&voteType)
-			if err == nil {
-				p.UserVote = &voteType
-			}
-		}
-
-		posts = append(posts, p)
+		post.Author = &author
+		post.Category = &category
+		// Set legacy fields for frontend compatibility
+		post.Users = &author
+		post.Categories = &category
+		posts = append(posts, post)
 	}
 
-	json.NewEncoder(w).Encode(models.APIResponse{Success: true, Data: posts})
-}
-
-// GetPost returns a single post by ID
-func GetPost(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	vars := mux.Vars(r)
-	idStr := vars["id"]
-
-	id, err := strconv.Atoi(idStr)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(models.APIResponse{Success: false, Error: "Invalid post ID"})
-		return
+	if posts == nil {
+		posts = []models.Post{}
 	}
-
-	var p models.Post
-	var author models.User
-	var community models.Community
-	var content, imageURL sql.NullString
-
-	err = db.DB.QueryRow(`
-		SELECT p.id, p.title, p.content, p.image_url, p.upvotes, p.downvotes, 
-			   p.comment_count, p.is_oc, p.created_at,
-			   u.id, u.username, u.karma, u.created_at,
-			   c.id, c.name, c.display_name, c.description, c.members, c.created_at
-		FROM posts p
-		JOIN users u ON p.author_id = u.id
-		JOIN communities c ON p.community_id = c.id
-		WHERE p.id = $1
-	`, id).Scan(
-		&p.ID, &p.Title, &content, &imageURL, &p.Upvotes, &p.Downvotes,
-		&p.CommentCount, &p.IsOC, &p.CreatedAt,
-		&author.ID, &author.Username, &author.Karma, &author.CreatedAt,
-		&community.ID, &community.Name, &community.DisplayName, &community.Description, &community.Members, &community.CreatedAt,
-	)
-
-	if err != nil {
-		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(models.APIResponse{Success: false, Error: "Post not found"})
-		return
-	}
-
-	p.Content = content.String
-	p.ImageURL = imageURL.String
-	p.Author = &author
-	p.Community = &community
-
-	// Get user's vote if authenticated
-	user := middleware.GetUserFromContext(r)
-	if user != nil {
-		var voteType string
-		err := db.DB.QueryRow(`
-			SELECT vote_type FROM votes WHERE user_id = $1 AND post_id = $2
-		`, user.ID, p.ID).Scan(&voteType)
-		if err == nil {
-			p.UserVote = &voteType
-		}
-	}
-
-	json.NewEncoder(w).Encode(models.APIResponse{Success: true, Data: p})
-}
-
-// CreatePost creates a new post
-func CreatePost(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	user := middleware.GetUserFromContext(r)
-	if user == nil {
-		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(models.APIResponse{Success: false, Error: "Authentication required"})
-		return
-	}
-
-	var req models.CreatePostRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(models.APIResponse{Success: false, Error: "Invalid request body"})
-		return
-	}
-
-	if req.Title == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(models.APIResponse{Success: false, Error: "Title is required"})
-		return
-	}
-
-	// Get community
-	var community models.Community
-	err := db.DB.QueryRow(`
-		SELECT id, name, display_name, description, members, created_at 
-		FROM communities WHERE id = $1
-	`, req.CommunityID).Scan(&community.ID, &community.Name, &community.DisplayName, &community.Description, &community.Members, &community.CreatedAt)
-
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(models.APIResponse{Success: false, Error: "Community not found"})
-		return
-	}
-
-	// Create post
-	var p models.Post
-	err = db.DB.QueryRow(`
-		INSERT INTO posts (title, content, author_id, community_id, is_oc)
-		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id, title, content, upvotes, downvotes, comment_count, is_oc, created_at
-	`, req.Title, req.Content, user.ID, req.CommunityID, req.IsOC).Scan(
-		&p.ID, &p.Title, &p.Content, &p.Upvotes, &p.Downvotes, &p.CommentCount, &p.IsOC, &p.CreatedAt,
-	)
-
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(models.APIResponse{Success: false, Error: "Failed to create post"})
-		return
-	}
-
-	p.Author = user
-	p.Community = &community
-
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(models.APIResponse{Success: true, Data: p})
-}
-
-// VotePost handles voting on a post
-func VotePost(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	user := middleware.GetUserFromContext(r)
-	if user == nil {
-		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(models.APIResponse{Success: false, Error: "Authentication required"})
-		return
-	}
-
-	vars := mux.Vars(r)
-	postID, err := strconv.Atoi(vars["id"])
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(models.APIResponse{Success: false, Error: "Invalid post ID"})
-		return
-	}
-
-	var req models.VoteRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(models.APIResponse{Success: false, Error: "Invalid request body"})
-		return
-	}
-
-	// Start transaction
-	tx, err := db.DB.Begin()
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(models.APIResponse{Success: false, Error: "Database error"})
-		return
-	}
-	defer tx.Rollback()
-
-	// Get existing vote
-	var existingVote string
-	err = tx.QueryRow(`SELECT vote_type FROM votes WHERE user_id = $1 AND post_id = $2`, user.ID, postID).Scan(&existingVote)
-	hasExistingVote := err == nil
-
-	// Remove existing vote effects
-	if hasExistingVote {
-		if existingVote == "up" {
-			tx.Exec("UPDATE posts SET upvotes = upvotes - 1 WHERE id = $1", postID)
-		} else {
-			tx.Exec("UPDATE posts SET downvotes = downvotes - 1 WHERE id = $1", postID)
-		}
-		tx.Exec("DELETE FROM votes WHERE user_id = $1 AND post_id = $2", user.ID, postID)
-	}
-
-	// Add new vote
-	if req.VoteType == "up" || req.VoteType == "down" {
-		tx.Exec(`INSERT INTO votes (user_id, post_id, vote_type) VALUES ($1, $2, $3)`, user.ID, postID, req.VoteType)
-		if req.VoteType == "up" {
-			tx.Exec("UPDATE posts SET upvotes = upvotes + 1 WHERE id = $1", postID)
-		} else {
-			tx.Exec("UPDATE posts SET downvotes = downvotes + 1 WHERE id = $1", postID)
-		}
-	}
-
-	if err = tx.Commit(); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(models.APIResponse{Success: false, Error: "Failed to vote"})
-		return
-	}
-
-	// Get updated post
-	var upvotes, downvotes int
-	db.DB.QueryRow("SELECT upvotes, downvotes FROM posts WHERE id = $1", postID).Scan(&upvotes, &downvotes)
-
-	json.NewEncoder(w).Encode(models.APIResponse{
-		Success: true,
-		Data: map[string]interface{}{
-			"upvotes":   upvotes,
-			"downvotes": downvotes,
-			"userVote":  req.VoteType,
-		},
-	})
-}
-
-// UpdatePost updates an existing post (only by author)
-func UpdatePost(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	user := middleware.GetUserFromContext(r)
-	if user == nil {
-		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(models.APIResponse{Success: false, Error: "Authentication required"})
-		return
-	}
-
-	vars := mux.Vars(r)
-	postID, err := strconv.Atoi(vars["id"])
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(models.APIResponse{Success: false, Error: "Invalid post ID"})
-		return
-	}
-
-	// Check if user is the author
-	var authorID int
-	err = db.DB.QueryRow("SELECT author_id FROM posts WHERE id = $1", postID).Scan(&authorID)
-	if err != nil {
-		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(models.APIResponse{Success: false, Error: "Post not found"})
-		return
-	}
-
-	if authorID != user.ID {
-		w.WriteHeader(http.StatusForbidden)
-		json.NewEncoder(w).Encode(models.APIResponse{Success: false, Error: "You can only edit your own posts"})
-		return
-	}
-
-	var req models.UpdatePostRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(models.APIResponse{Success: false, Error: "Invalid request body"})
-		return
-	}
-
-	// Update post
-	_, err = db.DB.Exec(`
-		UPDATE posts SET title = $1, content = $2 WHERE id = $3
-	`, req.Title, req.Content, postID)
-
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(models.APIResponse{Success: false, Error: "Failed to update post"})
-		return
-	}
-
-	json.NewEncoder(w).Encode(models.APIResponse{Success: true, Data: map[string]interface{}{
-		"id":      postID,
-		"title":   req.Title,
-		"content": req.Content,
-	}})
-}
-
-// DeletePost deletes a post (only by author)
-func DeletePost(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	user := middleware.GetUserFromContext(r)
-	if user == nil {
-		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(models.APIResponse{Success: false, Error: "Authentication required"})
-		return
-	}
-
-	vars := mux.Vars(r)
-	postID, err := strconv.Atoi(vars["id"])
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(models.APIResponse{Success: false, Error: "Invalid post ID"})
-		return
-	}
-
-	// Check if user is the author
-	var authorID int
-	err = db.DB.QueryRow("SELECT author_id FROM posts WHERE id = $1", postID).Scan(&authorID)
-	if err != nil {
-		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(models.APIResponse{Success: false, Error: "Post not found"})
-		return
-	}
-
-	if authorID != user.ID {
-		w.WriteHeader(http.StatusForbidden)
-		json.NewEncoder(w).Encode(models.APIResponse{Success: false, Error: "You can only delete your own posts"})
-		return
-	}
-
-	// Delete post (comments and votes will cascade)
-	_, err = db.DB.Exec("DELETE FROM posts WHERE id = $1", postID)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(models.APIResponse{Success: false, Error: "Failed to delete post"})
-		return
-	}
-
-	json.NewEncoder(w).Encode(models.APIResponse{Success: true, Data: map[string]interface{}{
-		"deleted": true,
-		"id":      postID,
-	}})
+	return posts
 }

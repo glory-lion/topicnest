@@ -1,147 +1,220 @@
 package handlers
 
 import (
-	"crypto/rand"
-	"database/sql"
-	"encoding/hex"
 	"encoding/json"
 	"net/http"
-	"time"
+	"strings"
 
 	"topicnest-backend/db"
-	"topicnest-backend/middleware"
 	"topicnest-backend/models"
+
+	"github.com/gorilla/mux"
 )
 
-// generateToken creates a random session token
-func generateToken() (string, error) {
-	bytes := make([]byte, 32)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(bytes), nil
-}
-
-// Login handles username-only authentication (like when2meet)
+// Login handles user login (creates user if not exists)
 func Login(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
 	var req models.LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(models.APIResponse{Success: false, Error: "Invalid request body"})
+		respondError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
 	if req.Username == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(models.APIResponse{Success: false, Error: "Username is required"})
+		respondError(w, http.StatusBadRequest, "Username is required")
 		return
 	}
 
-	// Find or create user
-	var user models.User
-	err := db.DB.QueryRow(`
-		SELECT id, username, karma, created_at FROM users WHERE username = $1
-	`, req.Username).Scan(&user.ID, &user.Username, &user.Karma, &user.CreatedAt)
-
-	if err == sql.ErrNoRows {
-		// Create new user
-		err = db.DB.QueryRow(`
-			INSERT INTO users (username) VALUES ($1)
-			RETURNING id, username, karma, created_at
-		`, req.Username).Scan(&user.ID, &user.Username, &user.Karma, &user.CreatedAt)
-		
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(models.APIResponse{Success: false, Error: "Failed to create user"})
-			return
-		}
-	} else if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(models.APIResponse{Success: false, Error: "Database error"})
-		return
-	}
-
-	// Generate session token
-	token, err := generateToken()
+	// Get or create user
+	user, err := getOrCreateUserByUsername(req.Username)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(models.APIResponse{Success: false, Error: "Failed to generate token"})
+		respondError(w, http.StatusInternalServerError, "Failed to login")
 		return
 	}
 
-	// Create session (expires in 30 days)
-	expiresAt := time.Now().Add(30 * 24 * time.Hour)
-	_, err = db.DB.Exec(`
-		INSERT INTO sessions (user_id, token, expires_at) VALUES ($1, $2, $3)
-	`, user.ID, token, expiresAt)
-
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(models.APIResponse{Success: false, Error: "Failed to create session"})
-		return
-	}
-
-	// Set cookie
-	http.SetCookie(w, &http.Cookie{
-		Name:     "session_token",
-		Value:    token,
-		Path:     "/",
-		Expires:  expiresAt,
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
+	// For now, use username as token (simple auth)
+	respondJSON(w, http.StatusOK, models.LoginResponse{
+		User:  user,
+		Token: user.ID,
 	})
+}
 
-	json.NewEncoder(w).Encode(models.APIResponse{
-		Success: true,
-		Data: models.LoginResponse{
-			User:  &user,
-			Token: token,
-		},
-	})
+// Logout handles user logout
+func Logout(w http.ResponseWriter, r *http.Request) {
+	respondJSON(w, http.StatusOK, map[string]string{"message": "Logged out successfully"})
 }
 
 // GetMe returns the current authenticated user
 func GetMe(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	user := middleware.GetUserFromContext(r)
-	if user == nil {
-		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(models.APIResponse{Success: false, Error: "Not authenticated"})
+	userID := r.Context().Value("user_id")
+	if userID == nil {
+		respondError(w, http.StatusUnauthorized, "Not authenticated")
 		return
 	}
 
-	json.NewEncoder(w).Encode(models.APIResponse{
-		Success: true,
-		Data:    user,
-	})
+	user, err := getUserByID(userID.(string))
+	if err != nil {
+		respondError(w, http.StatusNotFound, "User not found")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, user)
 }
 
-// Logout invalidates the current session
-func Logout(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+// GetOrCreateUser creates a user if not exists, returns existing user otherwise
+func GetOrCreateUser(w http.ResponseWriter, r *http.Request) {
+	var req models.LoginRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
 
-	// Get token from cookie or header
-	token := ""
-	cookie, err := r.Cookie("session_token")
+	if req.Username == "" {
+		respondError(w, http.StatusBadRequest, "Username is required")
+		return
+	}
+
+	user, err := getOrCreateUserByUsername(req.Username)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to get or create user")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, user)
+}
+
+// GetUserByID returns a user by their ID
+func GetUserByID(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	userID := vars["id"]
+
+	user, err := getUserByID(userID)
+	if err != nil {
+		respondError(w, http.StatusNotFound, "User not found")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, user)
+}
+
+// GetUserByUsername returns a user by their username
+func GetUserByUsername(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	username := vars["username"]
+
+	user, err := getUserByUsername(username)
+	if err != nil {
+		respondError(w, http.StatusNotFound, "User not found")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, user)
+}
+
+// GetUserWithStats returns a user with their post and comment counts
+func GetUserWithStats(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	userID := vars["id"]
+
+	user, err := getUserByID(userID)
+	if err != nil {
+		respondError(w, http.StatusNotFound, "User not found")
+		return
+	}
+
+	// Get post count
+	var postCount int
+	err = db.DB.QueryRow("SELECT COUNT(*) FROM posts WHERE user_id = $1", userID).Scan(&postCount)
+	if err != nil {
+		postCount = 0
+	}
+
+	// Get comment count
+	var commentCount int
+	err = db.DB.QueryRow("SELECT COUNT(*) FROM comments WHERE user_id = $1", userID).Scan(&commentCount)
+	if err != nil {
+		commentCount = 0
+	}
+
+	stats := models.UserStats{
+		User:         *user,
+		PostCount:    postCount,
+		CommentCount: commentCount,
+	}
+
+	respondJSON(w, http.StatusOK, stats)
+}
+
+// UpdateUser updates a user's profile
+func UpdateUser(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	userID := vars["id"]
+
+	var req models.UpdateUserRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	// Update user
+	_, err := db.DB.Exec(`
+		UPDATE users SET bio = COALESCE($1, bio), avatar_url = COALESCE($2, avatar_url)
+		WHERE id = $3
+	`, req.Bio, req.AvatarURL, userID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to update user")
+		return
+	}
+
+	user, err := getUserByID(userID)
+	if err != nil {
+		respondError(w, http.StatusNotFound, "User not found")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, user)
+}
+
+// ============ HELPER FUNCTIONS ============
+
+func getOrCreateUserByUsername(username string) (*models.User, error) {
+	// Try to get existing user
+	user, err := getUserByUsername(username)
 	if err == nil {
-		token = cookie.Value
+		return user, nil
 	}
 
-	if token != "" {
-		db.DB.Exec("DELETE FROM sessions WHERE token = $1", token)
+	// Create new user
+	var newUser models.User
+	err = db.DB.QueryRow(`
+		INSERT INTO users (username) VALUES ($1)
+		RETURNING id, username, bio, avatar_url, created_at
+	`, username).Scan(&newUser.ID, &newUser.Username, &newUser.Bio, &newUser.AvatarURL, &newUser.CreatedAt)
+	if err != nil {
+		return nil, err
 	}
 
-	// Clear cookie
-	http.SetCookie(w, &http.Cookie{
-		Name:     "session_token",
-		Value:    "",
-		Path:     "/",
-		Expires:  time.Unix(0, 0),
-		HttpOnly: true,
-	})
+	return &newUser, nil
+}
 
-	json.NewEncoder(w).Encode(models.APIResponse{Success: true})
+func getUserByID(id string) (*models.User, error) {
+	var user models.User
+	err := db.DB.QueryRow(`
+		SELECT id, username, bio, avatar_url, created_at FROM users WHERE id = $1
+	`, id).Scan(&user.ID, &user.Username, &user.Bio, &user.AvatarURL, &user.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+func getUserByUsername(username string) (*models.User, error) {
+	trimmedUsername := strings.TrimSpace(username)
+	var user models.User
+	err := db.DB.QueryRow(`
+		SELECT id, username, bio, avatar_url, created_at FROM users WHERE LOWER(username) = LOWER($1)
+	`, trimmedUsername).Scan(&user.ID, &user.Username, &user.Bio, &user.AvatarURL, &user.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
 }

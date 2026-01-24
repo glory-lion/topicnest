@@ -1,60 +1,78 @@
 package handlers
 
 import (
-	"encoding/json"
 	"net/http"
 
-	"github.com/gorilla/mux"
 	"topicnest-backend/db"
 	"topicnest-backend/models"
+
+	"github.com/gorilla/mux"
 )
 
-// GetCommunities returns all communities
-func GetCommunities(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
+// GetCategories returns all categories
+func GetCategories(w http.ResponseWriter, r *http.Request) {
 	rows, err := db.DB.Query(`
-		SELECT id, name, display_name, description, members, created_at 
-		FROM communities 
-		ORDER BY members DESC
+		SELECT id, name, slug, description, icon, gradient, glow_color, created_at 
+		FROM categories 
+		ORDER BY name ASC
 	`)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(models.APIResponse{Success: false, Error: "Database error"})
+		respondError(w, http.StatusInternalServerError, "Failed to fetch categories")
 		return
 	}
 	defer rows.Close()
 
-	var communities []models.Community
+	var categories []models.Category
 	for rows.Next() {
-		var c models.Community
-		err := rows.Scan(&c.ID, &c.Name, &c.DisplayName, &c.Description, &c.Members, &c.CreatedAt)
+		var cat models.Category
+		err := rows.Scan(&cat.ID, &cat.Name, &cat.Slug, &cat.Description, &cat.Icon, &cat.Gradient, &cat.GlowColor, &cat.CreatedAt)
 		if err != nil {
 			continue
 		}
-		communities = append(communities, c)
+		categories = append(categories, cat)
 	}
 
-	json.NewEncoder(w).Encode(models.APIResponse{Success: true, Data: communities})
+	if categories == nil {
+		categories = []models.Category{}
+	}
+
+	respondJSON(w, http.StatusOK, categories)
 }
 
-// GetCommunity returns a single community by name
-func GetCommunity(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+// GetCategoryByID returns a category by ID
+func GetCategoryByID(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	name := vars["name"]
+	categoryID := vars["id"]
 
-	var c models.Community
+	var cat models.Category
 	err := db.DB.QueryRow(`
-		SELECT id, name, display_name, description, members, created_at 
-		FROM communities WHERE name = $1
-	`, name).Scan(&c.ID, &c.Name, &c.DisplayName, &c.Description, &c.Members, &c.CreatedAt)
-
+		SELECT id, name, slug, description, icon, gradient, glow_color, created_at 
+		FROM categories 
+		WHERE id = $1
+	`, categoryID).Scan(&cat.ID, &cat.Name, &cat.Slug, &cat.Description, &cat.Icon, &cat.Gradient, &cat.GlowColor, &cat.CreatedAt)
 	if err != nil {
-		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(models.APIResponse{Success: false, Error: "Community not found"})
+		respondError(w, http.StatusNotFound, "Category not found")
 		return
 	}
 
-	json.NewEncoder(w).Encode(models.APIResponse{Success: true, Data: c})
+	respondJSON(w, http.StatusOK, cat)
+}
+
+// GetCategoryBySlug returns a category by slug
+func GetCategoryBySlug(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	slug := vars["slug"]
+
+	var cat models.Category
+	err := db.DB.QueryRow(`
+		SELECT id, name, slug, description, icon, gradient, glow_color, created_at 
+		FROM categories 
+		WHERE slug = $1
+	`, slug).Scan(&cat.ID, &cat.Name, &cat.Slug, &cat.Description, &cat.Icon, &cat.Gradient, &cat.GlowColor, &cat.CreatedAt)
+	if err != nil {
+		respondError(w, http.StatusNotFound, "Category not found")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, cat)
 }

@@ -387,13 +387,210 @@ body {
   color: white;
 }
 
-/* Responsive utilities */
+/* ============================================
+   RESPONSIVE STYLES
+   ============================================ */
+
+/* Mobile-first responsive breakpoints */
+/* Small devices (phones, 576px and down) */
+@media (max-width: 576px) {
+  /* Typography */
+  h1 { font-size: 24px !important; }
+  h2 { font-size: 20px !important; }
+  h3 { font-size: 16px !important; }
+  
+  /* Main containers */
+  main {
+    padding: 24px 16px !important;
+  }
+  
+  /* Cards and post containers */
+  article,
+  .post-card {
+    padding: 16px !important;
+    border-radius: 16px !important;
+  }
+  
+  /* Header */
+  header {
+    padding: 12px 16px !important;
+  }
+  
+  /* Hide non-essential elements on mobile */
+  .hide-mobile {
+    display: none !important;
+  }
+  
+  /* Category grid */
+  .category-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+  
+  /* Buttons */
+  button {
+    padding: 10px 16px !important;
+    font-size: 14px !important;
+  }
+  
+  /* Form elements */
+  input, textarea, select {
+    padding: 12px 14px !important;
+    font-size: 16px !important; /* Prevents zoom on iOS */
+  }
+  
+  /* Profile and avatar sizes */
+  .avatar-lg {
+    width: 80px !important;
+    height: 80px !important;
+  }
+  
+  /* Action buttons spacing */
+  .action-buttons {
+    gap: 6px !important;
+  }
+  
+  .action-buttons button {
+    width: 28px !important;
+    height: 28px !important;
+  }
+  
+  /* Comment section */
+  .comment-card {
+    padding: 12px !important;
+  }
+  
+  /* Search bar */
+  .search-container {
+    max-width: 100% !important;
+    margin: 0 8px !important;
+  }
+  
+  /* Mobile-friendly flexbox */
+  .flex-mobile-col {
+    flex-direction: column !important;
+    gap: 12px !important;
+  }
+  
+  /* Topic header */
+  .topic-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 16px !important;
+  }
+  
+  .topic-header button {
+    width: 100% !important;
+  }
+}
+
+/* Medium devices (tablets, 768px and down) */
 @media (max-width: 768px) {
-  .sidebar {
+  main {
+    padding: 32px 20px !important;
+    max-width: 100% !important;
+  }
+  
+  h1 { font-size: 28px !important; }
+  
+  /* Two column grid becomes single */
+  .grid-2 {
+    grid-template-columns: 1fr !important;
+  }
+  
+  /* Header search */
+  .header-search {
     display: none;
   }
+  
+  /* Mobile menu icon */
+  .mobile-menu-icon {
+    display: flex !important;
+  }
+  
+  /* Category cards */
+  .category-card {
+    padding: 16px !important;
+  }
+  
+  /* Post actions */
+  .post-actions {
+    flex-wrap: wrap;
+    gap: 8px !important;
+  }
+  
+  /* Background orbs - smaller on tablet */
+  .bg-orb {
+    width: 300px !important;
+    height: 300px !important;
+  }
+}
 
-  .main-content {
-    padding: 0 16px;
+/* Large devices (desktops, 992px and up) */
+@media (min-width: 992px) {
+  .container {
+    max-width: 900px;
+  }
+  
+  .grid-3 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Extra large devices (1200px and up) */
+@media (min-width: 1200px) {
+  .container {
+    max-width: 1100px;
+  }
+}
+
+/* Touch device optimizations */
+@media (hover: none) {
+  /* Remove hover effects on touch devices */
+  button:hover,
+  a:hover,
+  .card:hover {
+    transform: none !important;
+  }
+  
+  /* Larger touch targets */
+  button,
+  a,
+  .clickable {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* Portrait orientation specific */
+@media (orientation: portrait) {
+  .landscape-only {
+    display: none;
+  }
+}
+
+/* Utility classes for responsive show/hide */
+@media (max-width: 576px) {
+  .show-sm { display: block !important; }
+  .hide-sm { display: none !important; }
+}
+
+@media (min-width: 577px) and (max-width: 768px) {
+  .show-md { display: block !important; }
+  .hide-md { display: none !important; }
+}
+
+@media (min-width: 769px) {
+  .show-lg { display: block !important; }
+  .hide-lg { display: none !important; }
+}
+
+/* Safe area for notched devices */
+@supports (padding-top: env(safe-area-inset-top)) {
+  body {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
   }
 }

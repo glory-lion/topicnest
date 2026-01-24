@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 	"strings"
-	"time"
 
 	"topicnest-backend/db"
 	"topicnest-backend/models"
@@ -24,23 +23,16 @@ func GetUserFromContext(r *http.Request) *models.User {
 }
 
 // AuthMiddleware checks for valid session token and attaches user to context
+// For simplicity, we use the user ID directly as the token
 func AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Get token from Authorization header or cookie
+		// Get token from Authorization header
 		token := ""
-		
+
 		// Check Authorization header first
 		authHeader := r.Header.Get("Authorization")
 		if strings.HasPrefix(authHeader, "Bearer ") {
 			token = strings.TrimPrefix(authHeader, "Bearer ")
-		}
-		
-		// Fall back to cookie
-		if token == "" {
-			cookie, err := r.Cookie("session_token")
-			if err == nil {
-				token = cookie.Value
-			}
 		}
 
 		// If no token, continue without user (some endpoints allow unauthenticated access)
@@ -49,12 +41,12 @@ func AuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		// Look up session
-		var userID int
-		var expiresAt time.Time
+		// For simplicity, the token IS the user ID
+		// In production, you'd want proper JWT or session tokens
+		var user models.User
 		err := db.DB.QueryRow(`
-			SELECT user_id, expires_at FROM sessions WHERE token = $1
-		`, token).Scan(&userID, &expiresAt)
+			SELECT id, username, bio, avatar_url, created_at FROM users WHERE id = $1
+		`, token).Scan(&user.ID, &user.Username, &user.Bio, &user.AvatarURL, &user.CreatedAt)
 
 		if err != nil {
 			// Invalid token, continue without user
@@ -62,27 +54,9 @@ func AuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		// Check if session expired
-		if time.Now().After(expiresAt) {
-			// Delete expired session
-			db.DB.Exec("DELETE FROM sessions WHERE token = $1", token)
-			next.ServeHTTP(w, r)
-			return
-		}
-
-		// Get user
-		var user models.User
-		err = db.DB.QueryRow(`
-			SELECT id, username, karma, created_at FROM users WHERE id = $1
-		`, userID).Scan(&user.ID, &user.Username, &user.Karma, &user.CreatedAt)
-
-		if err != nil {
-			next.ServeHTTP(w, r)
-			return
-		}
-
-		// Add user to context
+		// Add user and user_id to context
 		ctx := context.WithValue(r.Context(), UserContextKey, &user)
+		ctx = context.WithValue(ctx, "user_id", user.ID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

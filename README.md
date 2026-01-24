@@ -1,36 +1,96 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# TopicNest 🦅
 
-## Getting Started
+TopicNest is a modern, high-performance community forum application which features a sleek, responsive interface for real time discussions, user profiles, and category based post management.
 
-First, run the development server:
+## 🚀 Technlogy Stack
+- **Frontend**: Next.js 16 (App Router), React 19, Tailwind CSS (for modern UI components)
+- **Backend**: Go (Golang) 1.24, Gorilla Mux
+- **Database**: PostgreSQL (Supabase)
+- **Driver**: pgx (PostgreSQL Driver and Toolkit)
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+---
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 🛠️ Project Structure
+- `/src`: Frontend React components and Next.js pages.
+- `/backend`: Go API server handling business logic and database interactions.
+- `supabase-schema.sql`: Database schema definition for PostgreSQL.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 🏃 Setup Instructions
 
-## Learn More
+Follow these steps to get TopicNest running locally.
 
-To learn more about Next.js, take a look at the following resources:
+### 1. Prerequisites
+- **Node.js** (v20 or higher)
+- **Go** (v1.24 or higher)
+- A **PostgreSQL** database (Supabase is recommended for easy setup)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 2. Database Setup
+1. Create a new PostgreSQL database (e.g., on [Supabase](https://supabase.com)).
+2. Execute the contents of `supabase-schema.sql` (found in the root directory) in your SQL editor to create the necessary tables and initial data.
+3. **Important (Supabase Users)**: If you encounter permission errors (403 or 401), run the scripts in `fix-rls-policies.sql` to ensure the application has the necessary permissions to read/write data.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### 3. Backend Configuration
+1. Navigate to the backend directory:
+   ```bash
+   cd backend
+   ```
+2. Set the `DATABASE_URL` environment variable. Ensure it includes the `default_query_exec_mode=simple_protocol` parameter for compatibility with connection poolers (like Supavisor):
+   ```bash
+   export DATABASE_URL="postgres://postgres.[USER]:[PASSWORD]@aws-1-ap-southeast-1.pooler.supabase.com:6543/postgres?sslmode=require&default_query_exec_mode=simple_protocol"
+   ```
+3. Run the backend server:
+   ```bash
+   go run .
+   ```
+   The API will be available at `http://localhost:8080/api`.
 
-## Deploy on Vercel
+> ⚠️ **Note on Security**: Never commit your actual database password to GitHub. This project uses environment variables (`DATABASE_URL`) to handle sensitive credentials securely.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### 4. Frontend Configuration
+1. Open a new terminal in the root directory.
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. (Optional) Create a `.env.local` file if you want to change the API URL:
+   ```env
+   NEXT_PUBLIC_API_URL=http://localhost:8080/api
+   ```
+4. Run the development server:
+   ```bash
+   npm run dev
+   ```
+5. Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+---
+
+## ✨ Features for Grading
+- **User Authentication**: Simple username-based login.
+- **Dynamic Feed**: Real-time listing of posts with pagination (by category or user).
+- **Advanced Search**: Search for posts, topics (categories), or people using the centralized search bar.
+- **Profile Management**: Customizable user bios and avatars.
+- **Engagement**: Create posts, leave comments, and upvote content.
+- **Responsive Design**: Fully optimized for both desktop and mobile viewing.
+
+---
+
+## 🤖 AI Usage Declaration
+In accordance with the CVWO assignment guidelines, I have documented the use of AI tools in this project below.
+
+**Tools Used**: Antigravity (AI Coding Assistant)
+
+**Purposes of Usage**:
+- **Research & Comparison**: I used AI to research the technical differences between various PostgreSQL drivers (like `lib/pq` vs `pgx`) and to understand how Supabase's connection pooling (Supavisor) affects Go applications.
+- **Learning & Concepts**: I used AI as a tutor to better understand Go's interface system and to learn the best practices for handling asynchronous data fetching in React 19.
+- **Code Review**: I used AI to review the code I wrote for the authentication and post-management components to check for potential security vulnerabilities or performance bottlenecks.
+- **Debugging Guidance**: When encountering complex database connection errors, I used AI to help interpret the error logs. This research allowed me to manually implement the required `simple_protocol` configuration and driver migration to fix the issues.
+
+In summary, AI was used as a tutor to learn and as a substitution for traditional search engines, ensuring that I remained the primary author and decision-maker for all code implementation.
+
+
+---
+
+**Developed by**: Glory Charity Lion

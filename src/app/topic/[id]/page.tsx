@@ -2,100 +2,138 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+import { getCategoryBySlug, getPostsByCategory, deletePost as deletePostFromDB, formatTimeAgo, Category, Post, PostWithRelations } from '@/lib/api';
+import Header from '@/components/Header';
+import ConfirmModal from '@/components/ConfirmModal';
+import Link from 'next/link';
 
-// Topic metadata
-const topicMeta: Record<string, { name: string; gradient: string; glowColor: string }> = {
-    'technology': {
-        name: 'Technology',
-        gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-        glowColor: 'rgba(102, 126, 234, 0.5)'
-    },
-    'gaming': {
-        name: 'Gaming',
-        gradient: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)',
-        glowColor: 'rgba(17, 153, 142, 0.5)'
-    },
-    'art-design': {
-        name: 'Art & Design',
-        gradient: 'linear-gradient(135deg, #ee0979 0%, #ff6a00 100%)',
-        glowColor: 'rgba(238, 9, 121, 0.5)'
-    },
-    'books': {
-        name: 'Books & Literature',
-        gradient: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-        glowColor: 'rgba(240, 147, 251, 0.5)'
-    },
-    'music': {
-        name: 'Music',
-        gradient: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-        glowColor: 'rgba(79, 172, 254, 0.5)'
-    },
-    'health': {
-        name: 'Health & Fitness',
-        gradient: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
-        glowColor: 'rgba(250, 112, 154, 0.5)'
-    }
-};
+// Default styling if category doesn't have custom styling
+const defaultGradient = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+const defaultGlowColor = 'rgba(102, 126, 234, 0.5)';
 
-// Mock posts data
-const mockPosts: Record<string, Array<{ id: string; title: string; excerpt: string; author: string; time: string; upvotes: number; comments: number }>> = {
-    'technology': [
-        { id: '1', title: 'The Future of AI in 2025', excerpt: 'Exploring the latest breakthroughs in artificial intelligence...', author: 'techguru', time: '2 hours ago', upvotes: 156, comments: 42 },
-        { id: '2', title: 'Best Programming Languages to Learn', excerpt: 'A comprehensive guide for beginners and experts alike...', author: 'codemaster', time: '5 hours ago', upvotes: 89, comments: 31 },
-        { id: '3', title: 'Web Development Trends', excerpt: 'What\'s hot in frontend and backend development...', author: 'webdev101', time: '1 day ago', upvotes: 67, comments: 18 },
-    ],
-    'gaming': [
-        { id: '1', title: 'Top 10 Indie Games of 2025', excerpt: 'These indie games are absolute gems...', author: 'gamerlord', time: '3 hours ago', upvotes: 42, comments: 23 },
-        { id: '2', title: 'Review: The Latest AAA Release', excerpt: 'Just finished the main story, here\'s my take...', author: 'reviewking', time: '6 hours ago', upvotes: 28, comments: 17 },
-    ],
-    'art-design': [
-        { id: '1', title: 'Digital Art Tips for Beginners', excerpt: 'Getting started with digital illustration...', author: 'artmaster', time: '4 hours ago', upvotes: 73, comments: 29 },
-        { id: '2', title: 'Color Theory Explained', excerpt: 'Understanding how colors work together...', author: 'designpro', time: '8 hours ago', upvotes: 51, comments: 14 },
-    ],
-    'books': [
-        { id: '1', title: 'Must-Read Sci-Fi Novels', excerpt: 'Expand your imagination with these classics...', author: 'bookworm', time: '1 hour ago', upvotes: 34, comments: 21 },
-        { id: '2', title: 'Reading Challenge 2025', excerpt: 'Join us in reading 52 books this year...', author: 'reader123', time: '12 hours ago', upvotes: 45, comments: 38 },
-    ],
-    'music': [
-        { id: '1', title: 'Best Albums of the Year', excerpt: 'A curated list of must-listen albums...', author: 'musicfan', time: '2 hours ago', upvotes: 67, comments: 25 },
-        { id: '2', title: 'Learning Guitar: Week 1', excerpt: 'My journey starting to learn guitar...', author: 'newbie_guitarist', time: '1 day ago', upvotes: 23, comments: 12 },
-    ],
-    'health': [
-        { id: '1', title: 'Morning Workout Routines', excerpt: 'Start your day with energy and focus...', author: 'fitlife', time: '5 hours ago', upvotes: 89, comments: 34 },
-        { id: '2', title: 'Healthy Meal Prep Ideas', excerpt: 'Easy recipes for the busy professional...', author: 'healthychef', time: '1 day ago', upvotes: 56, comments: 22 },
-    ]
-};
+interface DisplayPost {
+    id: string;
+    title: string;
+    excerpt: string;
+    author: string;
+    time: string;
+    upvotes: number;
+    comments: number;
+}
 
 export default function TopicPage() {
     const [username, setUsername] = useState<string>('');
+    const [userId, setUserId] = useState<string>('');
     const [hoveredPost, setHoveredPost] = useState<string | null>(null);
-    const [posts, setPosts] = useState<Array<{ id: string; title: string; excerpt: string; author: string; time: string; upvotes: number; comments: number }>>([]);
+    const [posts, setPosts] = useState<DisplayPost[]>([]);
+    const [category, setCategory] = useState<Category | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [deletingPostId, setDeletingPostId] = useState<string | null>(null);
+    const [postToDelete, setPostToDelete] = useState<string | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [isMobile, setIsMobile] = useState(false);
     const router = useRouter();
     const params = useParams();
     const topicId = params.id as string;
 
-    const topic = topicMeta[topicId] || { name: 'Unknown Topic', gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', glowColor: 'rgba(102, 126, 234, 0.5)' };
-    const defaultPosts = mockPosts[topicId] || [];
+    // Check screen size on mount and resize
+    useEffect(() => {
+        const checkScreenSize = () => {
+            setIsMobile(window.innerWidth < 768);
+        };
+        checkScreenSize();
+        window.addEventListener('resize', checkScreenSize);
+        return () => window.removeEventListener('resize', checkScreenSize);
+    }, []);
+
+    // Get category info
+    const topic = category ? {
+        name: category.name,
+        gradient: category.gradient || defaultGradient,
+        glowColor: category.glow_color || defaultGlowColor
+    } : {
+        name: 'Loading...',
+        gradient: defaultGradient,
+        glowColor: defaultGlowColor
+    };
 
     useEffect(() => {
         const storedUsername = localStorage.getItem('topicnest_user');
+        const storedUserId = localStorage.getItem('topicnest_user_id');
         if (!storedUsername) {
             router.push('/');
         } else {
             setUsername(storedUsername);
+            setUserId(storedUserId || '');
+            loadCategoryAndPosts();
         }
+    }, [router, topicId]);
 
-        // Load user-created posts from localStorage
-        const userPosts = JSON.parse(localStorage.getItem('topicnest_posts') || '{}');
-        const topicUserPosts = userPosts[topicId] || [];
+    const loadCategoryAndPosts = async () => {
+        try {
+            // Load category
+            const cat = await getCategoryBySlug(topicId);
+            if (cat) {
+                setCategory(cat);
 
-        // Merge user posts with default posts (user posts first)
-        setPosts([...topicUserPosts, ...defaultPosts]);
-    }, [router, topicId, defaultPosts]);
+                // Load posts for this category
+                const postsData = await getPostsByCategory(topicId);
+                const displayPosts: DisplayPost[] = postsData.map((post: PostWithRelations) => ({
+                    id: post.id,
+                    title: post.title,
+                    excerpt: post.content.substring(0, 150) + (post.content.length > 150 ? '...' : ''),
+                    author: post.users?.username || 'Anonymous',
+                    time: formatTimeAgo(post.created_at),
+                    upvotes: post.upvotes || 0,
+                    comments: post.comment_count || 0
+                }));
+                setPosts(displayPosts);
+            }
+        } catch (error) {
+            console.error('Error loading posts:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     const handleLogout = () => {
         localStorage.removeItem('topicnest_user');
+        localStorage.removeItem('topicnest_user_id');
         router.push('/');
+    };
+
+    const handleDeleteClick = (postId: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        setPostToDelete(postId);
+    };
+
+    const handleConfirmDelete = async () => {
+        if (!postToDelete) return;
+
+        setIsDeleting(true);
+        const originalPosts = [...posts];
+        setPosts(posts.filter(p => p.id !== postToDelete));
+
+        try {
+            await deletePostFromDB(postToDelete);
+            setPostToDelete(null);
+        } catch (error: any) {
+            console.error('Error deleting post:', error);
+            setPosts(originalPosts);
+
+            if (error.message?.includes('RLS') || error.message?.includes('Row Level Security')) {
+                alert('Delete failed: Database permissions issue.\n\nPlease run this SQL in your Supabase Dashboard:\n\nALTER TABLE posts DISABLE ROW LEVEL SECURITY;');
+            } else {
+                alert('Failed to delete post: ' + (error.message || 'Unknown error'));
+            }
+        } finally {
+            setIsDeleting(false);
+            setPostToDelete(null);
+        }
+    };
+
+    const handleCancelDelete = () => {
+        setPostToDelete(null);
     };
 
     if (!username) {
@@ -106,15 +144,15 @@ export default function TopicPage() {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    background: 'linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%)'
+                    background: 'linear-gradient(135deg, #fafbff 0%, #f0f4ff 50%, #faf5ff 100%)'
                 }}
             >
                 <div
                     style={{
                         width: '50px',
                         height: '50px',
-                        border: '3px solid rgba(255,255,255,0.1)',
-                        borderTop: '3px solid #a855f7',
+                        border: '3px solid rgba(139, 92, 246, 0.2)',
+                        borderTop: '3px solid #8b5cf6',
                         borderRadius: '50%',
                         animation: 'spin 1s linear infinite'
                     }}
@@ -127,12 +165,12 @@ export default function TopicPage() {
         <div
             style={{
                 minHeight: '100vh',
-                background: 'linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%)',
+                background: 'linear-gradient(135deg, #fafbff 0%, #f0f4ff 50%, #faf5ff 100%)',
                 position: 'relative',
                 overflow: 'hidden'
             }}
         >
-            {/* Animated Background Orbs */}
+            {/* Animated Background Orbs - Soft Pastels */}
             <div
                 style={{
                     position: 'absolute',
@@ -140,7 +178,7 @@ export default function TopicPage() {
                     left: '-10%',
                     width: '600px',
                     height: '600px',
-                    background: 'radial-gradient(circle, rgba(168, 85, 247, 0.15) 0%, transparent 70%)',
+                    background: 'radial-gradient(circle, rgba(139, 92, 246, 0.12) 0%, transparent 70%)',
                     borderRadius: '50%',
                     filter: 'blur(60px)',
                     animation: 'float 8s ease-in-out infinite'
@@ -153,150 +191,52 @@ export default function TopicPage() {
                     right: '-10%',
                     width: '500px',
                     height: '500px',
-                    background: 'radial-gradient(circle, rgba(59, 130, 246, 0.15) 0%, transparent 70%)',
+                    background: 'radial-gradient(circle, rgba(6, 182, 212, 0.1) 0%, transparent 70%)',
                     borderRadius: '50%',
                     filter: 'blur(60px)',
                     animation: 'float 10s ease-in-out infinite reverse'
                 }}
             />
 
-            {/* Glassmorphism Header */}
-            <header
-                style={{
-                    position: 'sticky',
-                    top: 0,
-                    zIndex: 50,
-                    background: 'rgba(15, 12, 41, 0.8)',
-                    backdropFilter: 'blur(20px)',
-                    WebkitBackdropFilter: 'blur(20px)',
-                    borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-                    padding: '16px 48px'
-                }}
-            >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                    {/* Back Button & Logo */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-                        <button
-                            onClick={() => router.push('/forum')}
-                            style={{
-                                width: '40px',
-                                height: '40px',
-                                borderRadius: '12px',
-                                background: 'rgba(255, 255, 255, 0.1)',
-                                border: '1px solid rgba(255, 255, 255, 0.1)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                cursor: 'pointer',
-                                transition: 'all 0.3s ease'
-                            }}
-                            onMouseEnter={(e) => {
-                                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
-                            }}
-                            onMouseLeave={(e) => {
-                                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
-                            }}
-                        >
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M19 12H5" />
-                                <polyline points="12 19 5 12 12 5" />
-                            </svg>
-                        </button>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            <div
-                                style={{
-                                    width: '44px',
-                                    height: '44px',
-                                    background: 'linear-gradient(135deg, #a855f7 0%, #ec4899 100%)',
-                                    borderRadius: '14px',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    boxShadow: '0 8px 32px rgba(168, 85, 247, 0.4)'
-                                }}
-                            >
-                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                                </svg>
-                            </div>
-                            <span
-                                style={{
-                                    fontSize: '24px',
-                                    fontWeight: '800',
-                                    background: 'linear-gradient(135deg, #a855f7 0%, #ec4899 50%, #f97316 100%)',
-                                    WebkitBackgroundClip: 'text',
-                                    WebkitTextFillColor: 'transparent',
-                                    backgroundClip: 'text',
-                                    letterSpacing: '-0.5px'
-                                }}
-                            >
-                                Topic<em style={{ fontStyle: 'italic' }}>Nest</em>
-                            </span>
-                        </div>
-                    </div>
-
-                    {/* User Section */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                        <span style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '18px' }}>
-                            Welcome, <span style={{ color: '#a855f7', fontWeight: '600' }}>{username}</span>
-                        </span>
-                        <div
-                            style={{
-                                width: '44px',
-                                height: '44px',
-                                background: 'linear-gradient(135deg, #a855f7 0%, #ec4899 100%)',
-                                borderRadius: '50%',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                color: 'white',
-                                fontWeight: '700',
-                                fontSize: '18px',
-                                cursor: 'pointer',
-                                boxShadow: '0 4px 20px rgba(168, 85, 247, 0.4)',
-                                transition: 'transform 0.3s ease, box-shadow 0.3s ease'
-                            }}
-                            onClick={handleLogout}
-                            title="Click to logout"
-                            onMouseEnter={(e) => {
-                                e.currentTarget.style.transform = 'scale(1.1)';
-                                e.currentTarget.style.boxShadow = '0 8px 30px rgba(168, 85, 247, 0.6)';
-                            }}
-                            onMouseLeave={(e) => {
-                                e.currentTarget.style.transform = 'scale(1)';
-                                e.currentTarget.style.boxShadow = '0 4px 20px rgba(168, 85, 247, 0.4)';
-                            }}
-                        >
-                            {username.charAt(0).toUpperCase()}
-                        </div>
-                    </div>
-                </div>
-            </header>
+            <Header username={username} />
 
             {/* Main Content */}
-            <main style={{ maxWidth: '900px', margin: '0 auto', padding: '48px 32px', position: 'relative', zIndex: 10 }}>
+            <main style={{
+                maxWidth: '900px',
+                margin: '0 auto',
+                padding: isMobile ? '24px 16px' : '48px 32px',
+                position: 'relative',
+                zIndex: 10
+            }}>
                 {/* Topic Header */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '40px' }}>
+                <div style={{
+                    display: 'flex',
+                    flexDirection: isMobile ? 'column' : 'row',
+                    alignItems: isMobile ? 'stretch' : 'center',
+                    justifyContent: 'space-between',
+                    marginBottom: isMobile ? '24px' : '40px',
+                    gap: isMobile ? '16px' : '0'
+                }}>
                     <div>
                         <h1
                             style={{
-                                fontSize: '36px',
+                                fontSize: isMobile ? '28px' : '36px',
                                 fontWeight: '800',
-                                color: '#ffffff',
+                                color: '#1e293b',
                                 marginBottom: '8px',
                                 letterSpacing: '-0.5px'
                             }}
                         >
                             {topic.name}
                         </h1>
-                        <p style={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: '16px' }}>
+                        <p style={{ color: '#64748b', fontSize: isMobile ? '14px' : '16px' }}>
                             {posts.length} discussions
                         </p>
                     </div>
                     <button
                         onClick={() => router.push(`/create?topic=${topicId}`)}
                         style={{
-                            padding: '14px 28px',
+                            padding: isMobile ? '12px 20px' : '14px 28px',
                             background: topic.gradient,
                             border: 'none',
                             borderRadius: '14px',
@@ -306,9 +246,11 @@ export default function TopicPage() {
                             cursor: 'pointer',
                             display: 'flex',
                             alignItems: 'center',
+                            justifyContent: 'center',
                             gap: '8px',
                             boxShadow: `0 8px 30px ${topic.glowColor}`,
-                            transition: 'all 0.3s ease'
+                            transition: 'all 0.3s ease',
+                            width: isMobile ? '100%' : 'auto'
                         }}
                         onMouseEnter={(e) => {
                             e.currentTarget.style.transform = 'translateY(-2px)';
@@ -332,13 +274,13 @@ export default function TopicPage() {
                     {posts.map((post, index) => (
                         <div
                             key={post.id}
-                            onClick={() => router.push(`/postdetail/${topicId}-${post.id}`)}
+                            onClick={() => router.push(`/postdetail/${post.id}`)}
                             onMouseEnter={() => setHoveredPost(post.id)}
                             onMouseLeave={() => setHoveredPost(null)}
                             style={{
                                 background: hoveredPost === post.id
-                                    ? 'rgba(255, 255, 255, 0.1)'
-                                    : 'rgba(255, 255, 255, 0.05)',
+                                    ? 'rgba(255, 255, 255, 0.98)'
+                                    : 'rgba(255, 255, 255, 0.9)',
                                 backdropFilter: 'blur(20px)',
                                 WebkitBackdropFilter: 'blur(20px)',
                                 borderRadius: '20px',
@@ -346,27 +288,100 @@ export default function TopicPage() {
                                 cursor: 'pointer',
                                 transition: 'all 0.3s ease',
                                 transform: hoveredPost === post.id ? 'translateX(8px)' : 'translateX(0)',
-                                border: '1px solid rgba(255, 255, 255, 0.1)',
+                                border: '1px solid rgba(139, 92, 246, 0.1)',
                                 borderLeft: hoveredPost === post.id
                                     ? `4px solid`
                                     : '4px solid transparent',
-                                borderLeftColor: hoveredPost === post.id ? topic.glowColor.replace('0.5', '1') : 'transparent',
+                                borderLeftColor: hoveredPost === post.id ? '#8b5cf6' : 'transparent',
+                                boxShadow: hoveredPost === post.id
+                                    ? '0 20px 40px rgba(139, 92, 246, 0.12)'
+                                    : '0 4px 16px rgba(0, 0, 0, 0.04)',
                                 animation: `fadeInUp 0.5s ease ${index * 0.1}s both`
                             }}
                         >
-                            <h3
-                                style={{
-                                    fontSize: '20px',
-                                    fontWeight: '700',
-                                    color: '#ffffff',
-                                    marginBottom: '10px'
-                                }}
-                            >
-                                {post.title}
-                            </h3>
+                            {/* Post header with title and action buttons */}
+                            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '10px' }}>
+                                <h3
+                                    style={{
+                                        fontSize: '20px',
+                                        fontWeight: '700',
+                                        color: '#1e293b',
+                                        flex: 1
+                                    }}
+                                >
+                                    {post.title}
+                                </h3>
+                                {/* Edit and Delete buttons - only show for own posts */}
+                                {post.author === username && (
+                                    <div style={{ display: 'flex', gap: '8px', marginLeft: '16px' }}>
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); router.push(`/create?topic=${topicId}&edit=${post.id}`); }}
+                                            title="Edit post"
+                                            style={{
+                                                width: '32px',
+                                                height: '32px',
+                                                borderRadius: '8px',
+                                                background: 'rgba(139, 92, 246, 0.1)',
+                                                border: '1px solid rgba(139, 92, 246, 0.15)',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.3s ease',
+                                                color: '#8b5cf6'
+                                            }}
+                                            onMouseEnter={(e) => {
+                                                e.currentTarget.style.background = 'rgba(139, 92, 246, 0.2)';
+                                                e.currentTarget.style.borderColor = 'rgba(139, 92, 246, 0.4)';
+                                            }}
+                                            onMouseLeave={(e) => {
+                                                e.currentTarget.style.background = 'rgba(139, 92, 246, 0.1)';
+                                                e.currentTarget.style.borderColor = 'rgba(139, 92, 246, 0.15)';
+                                            }}
+                                        >
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                                            </svg>
+                                        </button>
+                                        <button
+                                            onClick={(e) => handleDeleteClick(post.id, e)}
+                                            title="Delete post"
+                                            style={{
+                                                width: '32px',
+                                                height: '32px',
+                                                borderRadius: '8px',
+                                                background: 'rgba(239, 68, 68, 0.1)',
+                                                border: '1px solid rgba(239, 68, 68, 0.15)',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.3s ease',
+                                                color: '#ef4444'
+                                            }}
+                                            onMouseEnter={(e) => {
+                                                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)';
+                                                e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.4)';
+                                            }}
+                                            onMouseLeave={(e) => {
+                                                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
+                                                e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.15)';
+                                            }}
+                                        >
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <polyline points="3 6 5 6 21 6" />
+                                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                                <line x1="10" y1="11" x2="10" y2="17" />
+                                                <line x1="14" y1="11" x2="14" y2="17" />
+                                            </svg>
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
                             <p
                                 style={{
-                                    color: 'rgba(255, 255, 255, 0.6)',
+                                    color: '#64748b',
                                     fontSize: '15px',
                                     lineHeight: '1.6',
                                     marginBottom: '20px'
@@ -376,10 +391,16 @@ export default function TopicPage() {
                             </p>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                                    <span style={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: '13px' }}>
-                                        by <span style={{ color: '#a855f7', fontWeight: '500' }}>{post.author}</span>
+                                    <span style={{ color: '#94a3b8', fontSize: '13px' }}>
+                                        by <Link
+                                            href={`/profile/${post.author}`}
+                                            onClick={(e) => e.stopPropagation()}
+                                            style={{ color: '#8b5cf6', fontWeight: '500', textDecoration: 'none' }}
+                                        >
+                                            {post.author}
+                                        </Link>
                                     </span>
-                                    <span style={{ color: 'rgba(255, 255, 255, 0.4)', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <span style={{ color: '#94a3b8', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                             <circle cx="12" cy="12" r="10" />
                                             <polyline points="12 6 12 12 16 14" />
@@ -388,13 +409,13 @@ export default function TopicPage() {
                                     </span>
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-                                    <span style={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <span style={{ color: '#94a3b8', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                             <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" />
                                         </svg>
                                         {post.upvotes}
                                     </span>
-                                    <span style={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <span style={{ color: '#94a3b8', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
                                         </svg>
@@ -406,6 +427,19 @@ export default function TopicPage() {
                     ))}
                 </div>
             </main>
+
+            {/* Confirm Delete Modal */}
+            <ConfirmModal
+                isOpen={postToDelete !== null}
+                title="Delete Post?"
+                message="Are you sure you want to delete this post? This action cannot be undone."
+                confirmText="Delete"
+                cancelText="Cancel"
+                onConfirm={handleConfirmDelete}
+                onCancel={handleCancelDelete}
+                isLoading={isDeleting}
+                type="danger"
+            />
 
             {/* Animation Keyframes */}
             <style jsx global>{`

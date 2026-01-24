@@ -4,62 +4,73 @@ import "time"
 
 // User represents a forum user
 type User struct {
-	ID        int       `json:"id"`
+	ID        string    `json:"id"`
 	Username  string    `json:"username"`
-	Karma     int       `json:"karma"`
-	CreatedAt time.Time `json:"createdAt"`
+	Bio       *string   `json:"bio,omitempty"`
+	AvatarURL *string   `json:"avatar_url,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
-// Session represents a user session
-type Session struct {
-	ID        int       `json:"id"`
-	UserID    int       `json:"userId"`
-	Token     string    `json:"token"`
-	CreatedAt time.Time `json:"createdAt"`
-	ExpiresAt time.Time `json:"expiresAt"`
-}
-
-// Community represents a forum community/topic
-type Community struct {
-	ID          int       `json:"id"`
+// Category represents a forum category/topic
+type Category struct {
+	ID          string    `json:"id"`
 	Name        string    `json:"name"`
-	DisplayName string    `json:"displayName"`
-	Description string    `json:"description"`
-	Members     int       `json:"members"`
-	CreatedAt   time.Time `json:"createdAt"`
+	Slug        string    `json:"slug"`
+	Description *string   `json:"description,omitempty"`
+	Icon        *string   `json:"icon,omitempty"`
+	Gradient    *string   `json:"gradient,omitempty"`
+	GlowColor   *string   `json:"glow_color,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 // Post represents a forum post
 type Post struct {
-	ID           int        `json:"id"`
-	Title        string     `json:"title"`
-	Content      string     `json:"content,omitempty"`
-	ImageURL     string     `json:"imageUrl,omitempty"`
-	Author       *User      `json:"author"`
-	Community    *Community `json:"community"`
-	AuthorID     int        `json:"-"`
-	CommunityID  int        `json:"-"`
-	Upvotes      int        `json:"upvotes"`
-	Downvotes    int        `json:"downvotes"`
-	CommentCount int        `json:"commentCount"`
-	IsOC         bool       `json:"isOC"`
-	UserVote     *string    `json:"userVote"`
-	CreatedAt    time.Time  `json:"createdAt"`
+	ID         string     `json:"id"`
+	Title      string     `json:"title"`
+	Content    string     `json:"content"`
+	ImageURL   *string    `json:"image_url,omitempty"`
+	CategoryID string     `json:"category_id"`
+	UserID     string     `json:"user_id"`
+	Upvotes    int        `json:"upvotes"`
+	CreatedAt  time.Time  `json:"created_at"`
+	UpdatedAt  *time.Time `json:"updated_at,omitempty"`
+	// Joined fields
+	Author       *User     `json:"author,omitempty"`
+	Category     *Category `json:"category,omitempty"`
+	CommentCount int       `json:"comment_count,omitempty"`
+	// Legacy fields for frontend compatibility
+	Users      *User     `json:"users,omitempty"`
+	Categories *Category `json:"categories,omitempty"`
 }
 
 // Comment represents a comment on a post
 type Comment struct {
-	ID        int        `json:"id"`
+	ID        string     `json:"id"`
+	PostID    string     `json:"post_id"`
+	UserID    string     `json:"user_id"`
 	Content   string     `json:"content"`
-	Author    *User      `json:"author"`
-	PostID    int        `json:"postId"`
-	ParentID  *int       `json:"parentId,omitempty"`
 	Upvotes   int        `json:"upvotes"`
-	Downvotes int        `json:"downvotes"`
-	Replies   []*Comment `json:"replies,omitempty"`
-	UserVote  *string    `json:"userVote"`
-	CreatedAt time.Time  `json:"createdAt"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt *time.Time `json:"updated_at,omitempty"`
+	// Joined fields
+	Author *User `json:"author,omitempty"`
+	// Legacy fields for frontend compatibility
+	Users *User `json:"users,omitempty"`
 }
+
+// Bookmark represents a user's bookmarked post
+type Bookmark struct {
+	ID        string    `json:"id"`
+	UserID    string    `json:"user_id"`
+	PostID    string    `json:"post_id"`
+	CreatedAt time.Time `json:"created_at"`
+	// Joined fields
+	Post *Post `json:"post,omitempty"`
+	// Legacy fields for frontend compatibility
+	Posts *Post `json:"posts,omitempty"`
+}
+
+// ============ REQUEST/RESPONSE TYPES ============
 
 // LoginRequest represents a login request body
 type LoginRequest struct {
@@ -74,26 +85,21 @@ type LoginResponse struct {
 
 // CreatePostRequest represents a request to create a new post
 type CreatePostRequest struct {
-	Title       string `json:"title"`
-	Content     string `json:"content"`
-	CommunityID int    `json:"communityId"`
-	IsOC        bool   `json:"isOC"`
-}
-
-// CreateCommentRequest represents a request to create a comment
-type CreateCommentRequest struct {
-	Content  string `json:"content"`
-	ParentID *int   `json:"parentId,omitempty"`
-}
-
-// VoteRequest represents a vote request
-type VoteRequest struct {
-	VoteType string `json:"voteType"` // "up", "down", or "none"
+	Title      string  `json:"title"`
+	Content    string  `json:"content"`
+	CategoryID string  `json:"category_id"`
+	ImageURL   *string `json:"image_url,omitempty"`
 }
 
 // UpdatePostRequest represents a request to update a post
 type UpdatePostRequest struct {
-	Title   string `json:"title"`
+	Title    string  `json:"title"`
+	Content  string  `json:"content"`
+	ImageURL *string `json:"image_url,omitempty"`
+}
+
+// CreateCommentRequest represents a request to create a comment
+type CreateCommentRequest struct {
 	Content string `json:"content"`
 }
 
@@ -102,9 +108,22 @@ type UpdateCommentRequest struct {
 	Content string `json:"content"`
 }
 
+// UpdateUserRequest represents a request to update user profile
+type UpdateUserRequest struct {
+	Bio       *string `json:"bio,omitempty"`
+	AvatarURL *string `json:"avatar_url,omitempty"`
+}
+
 // APIResponse is a generic API response wrapper
 type APIResponse struct {
 	Success bool        `json:"success"`
 	Data    interface{} `json:"data,omitempty"`
 	Error   string      `json:"error,omitempty"`
+}
+
+// UserStats includes user with post and comment counts
+type UserStats struct {
+	User
+	PostCount    int `json:"post_count"`
+	CommentCount int `json:"comment_count"`
 }

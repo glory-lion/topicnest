@@ -28,42 +28,63 @@ func main() {
 	// Apply auth middleware to all routes
 	api.Use(middleware.AuthMiddleware)
 
-	// Auth routes
-	api.HandleFunc("/auth/login", handlers.Login).Methods("POST")
-	api.HandleFunc("/auth/logout", handlers.Logout).Methods("POST")
-	api.HandleFunc("/auth/me", handlers.GetMe).Methods("GET")
+	// ============ AUTH ROUTES ============
+	api.HandleFunc("/auth/login", handlers.Login).Methods("POST", "OPTIONS")
+	api.HandleFunc("/auth/logout", handlers.Logout).Methods("POST", "OPTIONS")
+	api.HandleFunc("/auth/me", handlers.GetMe).Methods("GET", "OPTIONS")
 
-	// Community routes
-	api.HandleFunc("/communities", handlers.GetCommunities).Methods("GET")
-	api.HandleFunc("/communities/{name}", handlers.GetCommunity).Methods("GET")
+	// ============ USER ROUTES ============
+	api.HandleFunc("/users", handlers.GetOrCreateUser).Methods("POST", "OPTIONS")
+	api.HandleFunc("/users/{id}", handlers.GetUserByID).Methods("GET", "OPTIONS")
+	api.HandleFunc("/users/{id}", handlers.UpdateUser).Methods("PUT", "OPTIONS")
+	api.HandleFunc("/users/username/{username}", handlers.GetUserByUsername).Methods("GET", "OPTIONS")
+	api.HandleFunc("/users/{id}/stats", handlers.GetUserWithStats).Methods("GET", "OPTIONS")
+	api.HandleFunc("/users/{id}/posts", handlers.GetPostsByUser).Methods("GET", "OPTIONS")
 
-	// Post routes
-	api.HandleFunc("/posts", handlers.GetPosts).Methods("GET")
-	api.HandleFunc("/posts", middleware.RequireAuth(handlers.CreatePost)).Methods("POST")
-	api.HandleFunc("/posts/{id}", handlers.GetPost).Methods("GET")
-	api.HandleFunc("/posts/{id}", middleware.RequireAuth(handlers.UpdatePost)).Methods("PUT")
-	api.HandleFunc("/posts/{id}", middleware.RequireAuth(handlers.DeletePost)).Methods("DELETE")
-	api.HandleFunc("/posts/{id}/vote", middleware.RequireAuth(handlers.VotePost)).Methods("POST")
-	api.HandleFunc("/posts/{id}/comments", handlers.GetComments).Methods("GET")
-	api.HandleFunc("/posts/{id}/comments", middleware.RequireAuth(handlers.CreateComment)).Methods("POST")
+	// ============ CATEGORY ROUTES ============
+	api.HandleFunc("/categories", handlers.GetCategories).Methods("GET", "OPTIONS")
+	api.HandleFunc("/categories/{id}", handlers.GetCategoryByID).Methods("GET", "OPTIONS")
+	api.HandleFunc("/categories/slug/{slug}", handlers.GetCategoryBySlug).Methods("GET", "OPTIONS")
 
-	// Comment routes
-	api.HandleFunc("/comments/{id}/vote", middleware.RequireAuth(handlers.VoteComment)).Methods("POST")
-	api.HandleFunc("/comments/{id}", middleware.RequireAuth(handlers.UpdateComment)).Methods("PUT")
-	api.HandleFunc("/comments/{id}", middleware.RequireAuth(handlers.DeleteComment)).Methods("DELETE")
+	// ============ POST ROUTES ============
+	api.HandleFunc("/posts", handlers.GetPosts).Methods("GET", "OPTIONS")
+	api.HandleFunc("/posts", handlers.CreatePost).Methods("POST", "OPTIONS")
+	api.HandleFunc("/posts/search", handlers.SearchPosts).Methods("GET", "OPTIONS")
+	api.HandleFunc("/posts/category/{slug}", handlers.GetPostsByCategory).Methods("GET", "OPTIONS")
+	api.HandleFunc("/posts/{id}", handlers.GetPost).Methods("GET", "OPTIONS")
+	api.HandleFunc("/posts/{id}", handlers.UpdatePost).Methods("PUT", "OPTIONS")
+	api.HandleFunc("/posts/{id}", handlers.DeletePost).Methods("DELETE", "OPTIONS")
+	api.HandleFunc("/posts/{id}/upvote", handlers.UpvotePost).Methods("POST", "OPTIONS")
 
-	// Setup CORS
+	// ============ COMMENT ROUTES ============
+	api.HandleFunc("/posts/{postId}/comments", handlers.GetCommentsByPost).Methods("GET", "OPTIONS")
+	api.HandleFunc("/posts/{postId}/comments", handlers.CreateComment).Methods("POST", "OPTIONS")
+	api.HandleFunc("/comments/{id}", handlers.UpdateComment).Methods("PUT", "OPTIONS")
+	api.HandleFunc("/comments/{id}", handlers.DeleteComment).Methods("DELETE", "OPTIONS")
+	api.HandleFunc("/comments/{id}/upvote", handlers.UpvoteComment).Methods("POST", "OPTIONS")
+
+	// ============ BOOKMARK ROUTES ============
+	api.HandleFunc("/users/{userId}/bookmarks", handlers.GetBookmarksByUser).Methods("GET", "OPTIONS")
+	api.HandleFunc("/bookmarks", handlers.AddBookmark).Methods("POST", "OPTIONS")
+	api.HandleFunc("/bookmarks", handlers.RemoveBookmark).Methods("DELETE", "OPTIONS")
+	api.HandleFunc("/bookmarks/check", handlers.IsPostBookmarked).Methods("GET", "OPTIONS")
+
+	// Setup CORS - allow all origins for development
 	c := cors.New(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:3000", "http://127.0.0.1:3000"},
+		AllowedOrigins:   []string{"http://localhost:3000", "http://127.0.0.1:3000", "*"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Authorization", "Content-Type"},
+		AllowedHeaders:   []string{"Authorization", "Content-Type", "X-Requested-With"},
 		AllowCredentials: true,
 	})
 
 	handler := c.Handler(r)
 
 	// Start server
-	log.Println("TopicNest API server starting on http://localhost:8080")
-	log.Println("Frontend should connect to: http://localhost:8080/api")
+	log.Println("============================================")
+	log.Println("TopicNest Go API Server")
+	log.Println("============================================")
+	log.Println("Server starting on http://localhost:8080")
+	log.Println("API Base URL: http://localhost:8080/api")
+	log.Println("============================================")
 	log.Fatal(http.ListenAndServe(":8080", handler))
 }

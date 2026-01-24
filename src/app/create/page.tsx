@@ -1,82 +1,168 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { getCategories, getCategoryById, getCategoryBySlug, createPost, getPostById, updatePost, uploadPostImage, createPostWithImage, Category } from '@/lib/api';
+import Header from '@/components/Header';
 
 export default function CreatePostPage() {
+    return (
+        <Suspense fallback={
+            <div
+                style={{
+                    minHeight: '100vh',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: 'linear-gradient(135deg, #fafbff 0%, #f0f4ff 50%, #faf5ff 100%)'
+                }}
+            >
+                <div
+                    style={{
+                        width: '50px',
+                        height: '50px',
+                        border: '3px solid rgba(139, 92, 246, 0.2)',
+                        borderTop: '3px solid #8b5cf6',
+                        borderRadius: '50%',
+                        animation: 'spin 1s linear infinite'
+                    }}
+                />
+            </div>
+        }>
+            <CreatePostContent />
+        </Suspense>
+    );
+}
+
+function CreatePostContent() {
     const [username, setUsername] = useState<string>('');
+    const [userId, setUserId] = useState<string>('');
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
+    const [categories, setCategories] = useState<Category[]>([]);
+    const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
+    const [isEditing, setIsEditing] = useState(false);
+    const [editPostId, setEditPostId] = useState<string | null>(null);
+    const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [imagePreview, setImagePreview] = useState<string | null>(null);
+    const [existingImageUrl, setExistingImageUrl] = useState<string | null>(null);
     const router = useRouter();
     const searchParams = useSearchParams();
-    const topicId = searchParams.get('topic') || '';
+    const categoryIdParam = searchParams.get('categoryId') || '';
+    const topicSlugParam = searchParams.get('topic') || '';
+    const editParam = searchParams.get('edit') || '';
 
-    // Topic display names
-    const topicNames: Record<string, string> = {
-        'technology': 'Technology',
-        'gaming': 'Gaming',
-        'art-design': 'Art & Design',
-        'books': 'Books & Literature',
-        'music': 'Music',
-        'health': 'Health & Fitness'
-    };
+    // Fetch categories and set up editing if applicable
+    const fetchData = useCallback(async () => {
+        try {
+            setIsLoading(true);
+            const categoriesData = await getCategories();
+            setCategories(categoriesData);
 
-    const topicName = topicNames[topicId] || 'Select Topic';
+            // If categoryId or topic slug is provided, set the selected category
+            if (categoryIdParam) {
+                const category = await getCategoryById(categoryIdParam);
+                if (category) {
+                    setSelectedCategory(category);
+                }
+            } else if (topicSlugParam) {
+                const category = await getCategoryBySlug(topicSlugParam);
+                if (category) {
+                    setSelectedCategory(category);
+                }
+            }
+
+            // If editing, load the post data
+            if (editParam) {
+                setIsEditing(true);
+                setEditPostId(editParam);
+                const postData = await getPostById(editParam);
+                if (postData) {
+                    setTitle(postData.title);
+                    setContent(postData.content);
+                    if (postData.category) {
+                        setSelectedCategory(postData.category);
+                    }
+                    if (postData.image_url) {
+                        setExistingImageUrl(postData.image_url);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching data:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    }, [categoryIdParam, editParam, topicSlugParam]);
 
     useEffect(() => {
         const storedUsername = localStorage.getItem('topicnest_user');
-        if (!storedUsername) {
+        const storedUserId = localStorage.getItem('topicnest_user_id');
+        if (!storedUsername || !storedUserId) {
             router.push('/');
         } else {
             setUsername(storedUsername);
+            setUserId(storedUserId);
+            fetchData();
         }
-    }, [router]);
+    }, [router, fetchData]);
 
     const handleLogout = () => {
         localStorage.removeItem('topicnest_user');
+        localStorage.removeItem('topicnest_user_id');
         router.push('/');
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (title.trim() && content.trim()) {
-            setIsSubmitting(true);
-
-            // Create new post object
-            const newPost = {
-                id: `user-${Date.now()}`,
-                title: title.trim(),
-                excerpt: content.trim().substring(0, 100) + (content.length > 100 ? '...' : ''),
-                content: content.trim(),
-                author: username,
-                time: 'just now',
-                upvotes: 0,
-                comments: 0
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            setSelectedFile(file);
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setImagePreview(reader.result as string);
             };
-
-            // Get existing posts from localStorage
-            const existingPosts = JSON.parse(localStorage.getItem('topicnest_posts') || '{}');
-
-            // Add new post to the topic
-            if (!existingPosts[topicId]) {
-                existingPosts[topicId] = [];
-            }
-            existingPosts[topicId].unshift(newPost); // Add to beginning
-
-            // Save back to localStorage
-            localStorage.setItem('topicnest_posts', JSON.stringify(existingPosts));
-
-            // Redirect to topic page
-            setTimeout(() => {
-                router.push(`/topic/${topicId}`);
-            }, 500);
+            reader.readAsDataURL(file);
         }
     };
 
-    const canSubmit = title.trim().length > 0 && content.trim().length > 0;
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (title.trim() && content.trim() && selectedCategory && userId) {
+            setIsSubmitting(true);
+            try {
+                let imageUrl = null;
 
-    if (!username) {
+                // Only attempt upload if a file is actually selected
+                if (selectedFile) {
+                    imageUrl = await uploadPostImage(selectedFile, userId);
+                } else if (existingImageUrl) {
+                    imageUrl = existingImageUrl;
+                }
+
+                if (isEditing && editPostId) {
+                    // Update existing post
+                    await updatePost(editPostId, title.trim(), content.trim(), imageUrl || undefined);
+                } else {
+                    // Create new post
+                    await createPostWithImage(title.trim(), content.trim(), selectedCategory.id, userId, imageUrl || undefined);
+                }
+                // Redirect to topic page
+                router.push(`/topic/${selectedCategory.slug}`);
+            } catch (error: any) {
+                console.error('Error saving post:', error);
+                alert(`Error saving post: ${error.message || 'Unknown error'}. 
+                
+If you uploaded an image, make sure it's under 5MB and that you've created the "post-images" bucket in Supabase.`);
+                setIsSubmitting(false);
+            }
+        }
+    };
+
+    const canSubmit = title.trim().length > 0 && content.trim().length > 0 && selectedCategory !== null;
+
+    if (!username || isLoading) {
         return (
             <div
                 style={{
@@ -84,15 +170,15 @@ export default function CreatePostPage() {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    background: 'linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%)'
+                    background: 'linear-gradient(135deg, #fafbff 0%, #f0f4ff 50%, #faf5ff 100%)'
                 }}
             >
                 <div
                     style={{
                         width: '50px',
                         height: '50px',
-                        border: '3px solid rgba(255,255,255,0.1)',
-                        borderTop: '3px solid #a855f7',
+                        border: '3px solid rgba(139, 92, 246, 0.2)',
+                        borderTop: '3px solid #8b5cf6',
                         borderRadius: '50%',
                         animation: 'spin 1s linear infinite'
                     }}
@@ -105,12 +191,12 @@ export default function CreatePostPage() {
         <div
             style={{
                 minHeight: '100vh',
-                background: 'linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%)',
+                background: 'linear-gradient(135deg, #fafbff 0%, #f0f4ff 50%, #faf5ff 100%)',
                 position: 'relative',
                 overflow: 'hidden'
             }}
         >
-            {/* Animated Background Orbs */}
+            {/* Animated Background Orbs - Soft Pastels */}
             <div
                 style={{
                     position: 'absolute',
@@ -118,7 +204,7 @@ export default function CreatePostPage() {
                     left: '-10%',
                     width: '600px',
                     height: '600px',
-                    background: 'radial-gradient(circle, rgba(168, 85, 247, 0.15) 0%, transparent 70%)',
+                    background: 'radial-gradient(circle, rgba(139, 92, 246, 0.12) 0%, transparent 70%)',
                     borderRadius: '50%',
                     filter: 'blur(60px)',
                     animation: 'float 8s ease-in-out infinite'
@@ -131,125 +217,14 @@ export default function CreatePostPage() {
                     right: '-10%',
                     width: '500px',
                     height: '500px',
-                    background: 'radial-gradient(circle, rgba(59, 130, 246, 0.15) 0%, transparent 70%)',
+                    background: 'radial-gradient(circle, rgba(6, 182, 212, 0.1) 0%, transparent 70%)',
                     borderRadius: '50%',
                     filter: 'blur(60px)',
                     animation: 'float 10s ease-in-out infinite reverse'
                 }}
             />
 
-            {/* Glassmorphism Header */}
-            <header
-                style={{
-                    position: 'sticky',
-                    top: 0,
-                    zIndex: 50,
-                    background: 'rgba(15, 12, 41, 0.8)',
-                    backdropFilter: 'blur(20px)',
-                    WebkitBackdropFilter: 'blur(20px)',
-                    borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-                    padding: '16px 48px'
-                }}
-            >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                    {/* Back Button & Logo */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-                        <button
-                            onClick={() => router.back()}
-                            style={{
-                                width: '40px',
-                                height: '40px',
-                                borderRadius: '12px',
-                                background: 'rgba(255, 255, 255, 0.1)',
-                                border: '1px solid rgba(255, 255, 255, 0.1)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                cursor: 'pointer',
-                                transition: 'all 0.3s ease'
-                            }}
-                            onMouseEnter={(e) => {
-                                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
-                            }}
-                            onMouseLeave={(e) => {
-                                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
-                            }}
-                        >
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M19 12H5" />
-                                <polyline points="12 19 5 12 12 5" />
-                            </svg>
-                        </button>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            <div
-                                style={{
-                                    width: '44px',
-                                    height: '44px',
-                                    background: 'linear-gradient(135deg, #a855f7 0%, #ec4899 100%)',
-                                    borderRadius: '14px',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    boxShadow: '0 8px 32px rgba(168, 85, 247, 0.4)'
-                                }}
-                            >
-                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                                </svg>
-                            </div>
-                            <span
-                                style={{
-                                    fontSize: '24px',
-                                    fontWeight: '800',
-                                    background: 'linear-gradient(135deg, #a855f7 0%, #ec4899 50%, #f97316 100%)',
-                                    WebkitBackgroundClip: 'text',
-                                    WebkitTextFillColor: 'transparent',
-                                    backgroundClip: 'text',
-                                    letterSpacing: '-0.5px'
-                                }}
-                            >
-                                Topic<em style={{ fontStyle: 'italic' }}>Nest</em>
-                            </span>
-                        </div>
-                    </div>
-
-                    {/* User Section */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                        <span style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '18px' }}>
-                            Welcome, <span style={{ color: '#a855f7', fontWeight: '600' }}>{username}</span>
-                        </span>
-                        <div
-                            style={{
-                                width: '44px',
-                                height: '44px',
-                                background: 'linear-gradient(135deg, #a855f7 0%, #ec4899 100%)',
-                                borderRadius: '50%',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                color: 'white',
-                                fontWeight: '700',
-                                fontSize: '18px',
-                                cursor: 'pointer',
-                                boxShadow: '0 4px 20px rgba(168, 85, 247, 0.4)',
-                                transition: 'transform 0.3s ease, box-shadow 0.3s ease'
-                            }}
-                            onClick={handleLogout}
-                            title="Click to logout"
-                            onMouseEnter={(e) => {
-                                e.currentTarget.style.transform = 'scale(1.1)';
-                                e.currentTarget.style.boxShadow = '0 8px 30px rgba(168, 85, 247, 0.6)';
-                            }}
-                            onMouseLeave={(e) => {
-                                e.currentTarget.style.transform = 'scale(1)';
-                                e.currentTarget.style.boxShadow = '0 4px 20px rgba(168, 85, 247, 0.4)';
-                            }}
-                        >
-                            {username.charAt(0).toUpperCase()}
-                        </div>
-                    </div>
-                </div>
-            </header>
+            <Header username={username} />
 
             {/* Main Content */}
             <main style={{ maxWidth: '800px', margin: '0 auto', padding: '48px 32px', position: 'relative', zIndex: 10 }}>
@@ -259,15 +234,18 @@ export default function CreatePostPage() {
                         style={{
                             fontSize: '36px',
                             fontWeight: '800',
-                            color: '#ffffff',
+                            color: '#1e293b',
                             marginBottom: '8px',
                             letterSpacing: '-0.5px'
                         }}
                     >
-                        Create New Post
+                        {isEditing ? 'Edit Post' : 'Create New Post'}
                     </h1>
-                    <p style={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: '16px' }}>
-                        Posting in <span style={{ color: '#a855f7', fontWeight: '600' }}>{topicName}</span>
+                    <p style={{ color: '#64748b', fontSize: '16px' }}>
+                        {selectedCategory
+                            ? <>Posting in <span style={{ color: '#8b5cf6', fontWeight: '600' }}>{selectedCategory.name}</span></>
+                            : 'Select a category below'
+                        }
                     </p>
                 </div>
 
@@ -275,12 +253,13 @@ export default function CreatePostPage() {
                 <form onSubmit={handleSubmit}>
                     <div
                         style={{
-                            background: 'rgba(255, 255, 255, 0.05)',
+                            background: 'rgba(255, 255, 255, 0.9)',
                             backdropFilter: 'blur(20px)',
                             WebkitBackdropFilter: 'blur(20px)',
                             borderRadius: '24px',
                             padding: '32px',
-                            border: '1px solid rgba(255, 255, 255, 0.1)',
+                            border: '1px solid rgba(139, 92, 246, 0.1)',
+                            boxShadow: '0 10px 40px rgba(0, 0, 0, 0.06)',
                             animation: 'fadeInUp 0.5s ease both'
                         }}
                     >
@@ -290,7 +269,7 @@ export default function CreatePostPage() {
                                 htmlFor="title"
                                 style={{
                                     display: 'block',
-                                    color: '#ffffff',
+                                    color: '#1e293b',
                                     fontSize: '15px',
                                     fontWeight: '600',
                                     marginBottom: '10px'
@@ -309,24 +288,67 @@ export default function CreatePostPage() {
                                     width: '100%',
                                     padding: '16px 20px',
                                     borderRadius: '16px',
-                                    background: 'rgba(255, 255, 255, 0.05)',
-                                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                                    color: '#ffffff',
+                                    background: 'rgba(139, 92, 246, 0.05)',
+                                    border: '1px solid rgba(139, 92, 246, 0.15)',
+                                    color: '#1e293b',
                                     fontSize: '16px',
                                     outline: 'none',
                                     transition: 'border-color 0.3s ease'
                                 }}
                                 onFocus={(e) => {
-                                    e.target.style.borderColor = 'rgba(168, 85, 247, 0.5)';
+                                    e.target.style.borderColor = 'rgba(139, 92, 246, 0.4)';
                                 }}
                                 onBlur={(e) => {
-                                    e.target.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+                                    e.target.style.borderColor = 'rgba(139, 92, 246, 0.15)';
                                 }}
                             />
-                            <div style={{ textAlign: 'right', marginTop: '8px', color: 'rgba(255, 255, 255, 0.4)', fontSize: '13px' }}>
+                            <div style={{ textAlign: 'right', marginTop: '8px', color: '#94a3b8', fontSize: '13px' }}>
                                 {title.length}/300
                             </div>
                         </div>
+
+                        {/* Category Selector */}
+                        {!isEditing && (
+                            <div style={{ marginBottom: '24px' }}>
+                                <label
+                                    htmlFor="category"
+                                    style={{
+                                        display: 'block',
+                                        color: '#1e293b',
+                                        fontSize: '15px',
+                                        fontWeight: '600',
+                                        marginBottom: '10px'
+                                    }}
+                                >
+                                    Category
+                                </label>
+                                <select
+                                    id="category"
+                                    value={selectedCategory?.id || ''}
+                                    onChange={(e) => {
+                                        const cat = categories.find(c => c.id === e.target.value);
+                                        setSelectedCategory(cat || null);
+                                    }}
+                                    style={{
+                                        width: '100%',
+                                        padding: '16px 20px',
+                                        borderRadius: '16px',
+                                        background: 'rgba(139, 92, 246, 0.05)',
+                                        border: '1px solid rgba(139, 92, 246, 0.15)',
+                                        color: '#1e293b',
+                                        fontSize: '16px',
+                                        outline: 'none',
+                                        cursor: 'pointer',
+                                        transition: 'border-color 0.3s ease'
+                                    }}
+                                >
+                                    <option value="">Select a category...</option>
+                                    {categories.map(cat => (
+                                        <option key={cat.id} value={cat.id}>{cat.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
 
                         {/* Content Input */}
                         <div style={{ marginBottom: '28px' }}>
@@ -334,7 +356,7 @@ export default function CreatePostPage() {
                                 htmlFor="content"
                                 style={{
                                     display: 'block',
-                                    color: '#ffffff',
+                                    color: '#1e293b',
                                     fontSize: '15px',
                                     fontWeight: '600',
                                     marginBottom: '10px'
@@ -352,9 +374,9 @@ export default function CreatePostPage() {
                                     width: '100%',
                                     padding: '16px 20px',
                                     borderRadius: '16px',
-                                    background: 'rgba(255, 255, 255, 0.05)',
-                                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                                    color: '#ffffff',
+                                    background: 'rgba(139, 92, 246, 0.05)',
+                                    border: '1px solid rgba(139, 92, 246, 0.15)',
+                                    color: '#1e293b',
                                     fontSize: '15px',
                                     lineHeight: '1.7',
                                     resize: 'vertical',
@@ -363,12 +385,95 @@ export default function CreatePostPage() {
                                     minHeight: '200px'
                                 }}
                                 onFocus={(e) => {
-                                    e.target.style.borderColor = 'rgba(168, 85, 247, 0.5)';
+                                    e.target.style.borderColor = 'rgba(139, 92, 246, 0.4)';
                                 }}
                                 onBlur={(e) => {
-                                    e.target.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+                                    e.target.style.borderColor = 'rgba(139, 92, 246, 0.15)';
                                 }}
                             />
+                        </div>
+
+                        {/* Image Upload */}
+                        <div style={{ marginBottom: '28px' }}>
+                            <label
+                                style={{
+                                    display: 'block',
+                                    color: '#1e293b',
+                                    fontSize: '15px',
+                                    fontWeight: '600',
+                                    marginBottom: '10px'
+                                }}
+                            >
+                                Add Image (Optional)
+                            </label>
+                            <div
+                                style={{
+                                    border: '2px dashed rgba(139, 92, 246, 0.2)',
+                                    borderRadius: '16px',
+                                    padding: '24px',
+                                    textAlign: 'center',
+                                    background: 'rgba(139, 92, 246, 0.02)',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.3s ease'
+                                }}
+                                onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#8b5cf6'; e.currentTarget.style.background = 'rgba(139, 92, 246, 0.05)'; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(139, 92, 246, 0.2)'; e.currentTarget.style.background = 'rgba(139, 92, 246, 0.02)'; }}
+                                onClick={() => document.getElementById('image-upload')?.click()}
+                            >
+                                <input
+                                    id="image-upload"
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={handleFileChange}
+                                    style={{ display: 'none' }}
+                                />
+                                {imagePreview || existingImageUrl ? (
+                                    <div style={{ position: 'relative', display: 'inline-block' }}>
+                                        <img
+                                            src={imagePreview || existingImageUrl || ''}
+                                            alt="Preview"
+                                            style={{ maxWidth: '100%', maxHeight: '300px', borderRadius: '12px' }}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setSelectedFile(null);
+                                                setImagePreview(null);
+                                                setExistingImageUrl(null);
+                                            }}
+                                            style={{
+                                                position: 'absolute',
+                                                top: '-10px',
+                                                right: '-10px',
+                                                width: '24px',
+                                                height: '24px',
+                                                borderRadius: '50%',
+                                                background: '#ef4444',
+                                                color: '#fff',
+                                                border: 'none',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                cursor: 'pointer',
+                                                boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
+                                            }}
+                                        >
+                                            ✕
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                                            <circle cx="8.5" cy="8.5" r="1.5" />
+                                            <polyline points="21 15 16 10 5 21" />
+                                        </svg>
+                                        <p style={{ color: '#64748b', fontSize: '14px' }}>Click to upload an image</p>
+                                        <p style={{ color: '#94a3b8', fontSize: '12px' }}>PNG, JPG or GIF up to 5MB</p>
+                                    </div>
+                                )}
+                            </div>
                         </div>
 
                         {/* Action Buttons */}
@@ -379,19 +484,19 @@ export default function CreatePostPage() {
                                 style={{
                                     padding: '14px 28px',
                                     borderRadius: '14px',
-                                    background: 'rgba(255, 255, 255, 0.1)',
-                                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                                    color: 'rgba(255, 255, 255, 0.7)',
+                                    background: 'rgba(139, 92, 246, 0.1)',
+                                    border: '1px solid rgba(139, 92, 246, 0.15)',
+                                    color: '#64748b',
                                     fontSize: '15px',
                                     fontWeight: '600',
                                     cursor: 'pointer',
                                     transition: 'all 0.3s ease'
                                 }}
                                 onMouseEnter={(e) => {
-                                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
+                                    e.currentTarget.style.background = 'rgba(139, 92, 246, 0.15)';
                                 }}
                                 onMouseLeave={(e) => {
-                                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                                    e.currentTarget.style.background = 'rgba(139, 92, 246, 0.1)';
                                 }}
                             >
                                 Cancel
@@ -403,15 +508,15 @@ export default function CreatePostPage() {
                                     padding: '14px 32px',
                                     borderRadius: '14px',
                                     background: canSubmit && !isSubmitting
-                                        ? 'linear-gradient(135deg, #a855f7 0%, #ec4899 100%)'
-                                        : 'rgba(255, 255, 255, 0.1)',
+                                        ? 'linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%)'
+                                        : 'rgba(139, 92, 246, 0.1)',
                                     border: 'none',
-                                    color: canSubmit && !isSubmitting ? 'white' : 'rgba(255, 255, 255, 0.4)',
+                                    color: canSubmit && !isSubmitting ? 'white' : '#94a3b8',
                                     fontSize: '15px',
                                     fontWeight: '600',
                                     cursor: canSubmit && !isSubmitting ? 'pointer' : 'not-allowed',
                                     transition: 'all 0.3s ease',
-                                    boxShadow: canSubmit && !isSubmitting ? '0 8px 30px rgba(168, 85, 247, 0.4)' : 'none',
+                                    boxShadow: canSubmit && !isSubmitting ? '0 8px 30px rgba(139, 92, 246, 0.3)' : 'none',
                                     display: 'flex',
                                     alignItems: 'center',
                                     gap: '10px'
@@ -450,13 +555,13 @@ export default function CreatePostPage() {
                     style={{
                         marginTop: '24px',
                         padding: '24px',
-                        background: 'rgba(168, 85, 247, 0.1)',
+                        background: 'rgba(139, 92, 246, 0.08)',
                         borderRadius: '16px',
-                        border: '1px solid rgba(168, 85, 247, 0.2)',
+                        border: '1px solid rgba(139, 92, 246, 0.15)',
                         animation: 'fadeInUp 0.5s ease 0.1s both'
                     }}
                 >
-                    <h3 style={{ color: '#a855f7', fontSize: '15px', fontWeight: '600', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <h3 style={{ color: '#8b5cf6', fontSize: '15px', fontWeight: '600', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <circle cx="12" cy="12" r="10" />
                             <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
@@ -464,7 +569,7 @@ export default function CreatePostPage() {
                         </svg>
                         Tips for a great post
                     </h3>
-                    <ul style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '14px', lineHeight: '1.8', paddingLeft: '20px', margin: 0 }}>
+                    <ul style={{ color: '#64748b', fontSize: '14px', lineHeight: '1.8', paddingLeft: '20px', margin: 0 }}>
                         <li>Use a clear and descriptive title</li>
                         <li>Be respectful and constructive in your discussions</li>
                         <li>Add relevant details to help others understand your point</li>
@@ -499,7 +604,7 @@ export default function CreatePostPage() {
                     }
                 }
                 input::placeholder, textarea::placeholder {
-                    color: rgba(255, 255, 255, 0.4);
+                    color: #94a3b8;
                 }
             `}</style>
         </div>
