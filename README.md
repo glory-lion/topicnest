@@ -1,6 +1,6 @@
 # TopicNest 🦅
 
-TopicNest is a modern, high-performance community forum application which features a sleek, responsive interface for real time discussions, user profiles, and category based post management.
+TopicNest is a modern, high performance community forum application which features a sleek, responsive interface for real time discussions, user profiles, and category based post management.
 
 ## 🚀 Technlogy Stack
 - **Frontend**: Next.js 16 (App Router), React 19, Tailwind CSS (for modern UI components)
@@ -46,7 +46,6 @@ Follow these steps to get TopicNest running locally.
    ```
    The API will be available at `http://localhost:8080/api`.
 
-> ⚠️ **Note on Security**: Never commit your actual database password to GitHub. This project uses environment variables (`DATABASE_URL`) to handle sensitive credentials securely.
 
 
 ### 4. Frontend Configuration
@@ -79,8 +78,6 @@ Follow these steps to get TopicNest running locally.
 
 ## 🤖 AI Usage Declaration
 In accordance with the CVWO assignment guidelines, I have documented the use of AI tools in this project below.
-
-**Tools Used**: Antigravity (AI Coding Assistant)
 
 **Purposes of Usage**:
 - **Research & Comparison**: I used AI to research the technical differences between various PostgreSQL drivers (like `lib/pq` vs `pgx`) and to understand how Supabase's connection pooling (Supavisor) affects Go applications.
