@@ -3,16 +3,23 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
 
 	"topicnest-backend/db"
 	"topicnest-backend/handlers"
 	"topicnest-backend/middleware"
 
 	"github.com/gorilla/mux"
+	"github.com/joho/godotenv"
 	"github.com/rs/cors"
 )
 
 func main() {
+	// Load .env file if it exists
+	if err := godotenv.Load(); err != nil {
+		log.Println("No .env file found, relying on environment variables")
+	}
+
 	// Initialize database
 	if err := db.Initialize(); err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
@@ -80,11 +87,15 @@ func main() {
 	handler := c.Handler(r)
 
 	// Start server
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
 	log.Println("============================================")
 	log.Println("TopicNest Go API Server")
 	log.Println("============================================")
-	log.Println("Server starting on http://localhost:8080")
-	log.Println("API Base URL: http://localhost:8080/api")
+	log.Printf("Server starting on port %s\n", port)
 	log.Println("============================================")
-	log.Fatal(http.ListenAndServe(":8080", handler))
+	log.Fatal(http.ListenAndServe(":"+port, handler))
 }
