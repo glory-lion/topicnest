@@ -5,10 +5,8 @@ import { useRouter } from 'next/navigation';
 
 export default function LandingPage() {
   const [username, setUsername] = useState('');
-  const [isLogin, setIsLogin] = useState(true); // true = login, false = signup
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [successMsg, setSuccessMsg] = useState('');
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -17,10 +15,9 @@ export default function LandingPage() {
 
       setIsLoading(true);
       setError('');
-      setSuccessMsg('');
 
       try {
-        const endpoint = isLogin ? '/api/auth/login' : '/api/users';
+        const endpoint = '/api/users'; // This handles both new and existing users
         const envUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
         const apiUrl = envUrl.trim().replace(/\/$/, ''); // Remove whitespace and trailing slash
         const fullUrl = `${apiUrl}${endpoint}`;
@@ -52,17 +49,10 @@ export default function LandingPage() {
         const user = data.user || data;
         const token = data.token || user.id;
 
-        if (isLogin) {
-          // Store user data and redirect only if logging in
-          localStorage.setItem('topicnest_user', user.username);
-          localStorage.setItem('topicnest_user_id', token);
-          router.push('/forum');
-        } else {
-          // Signup successful - auto login
-          localStorage.setItem('topicnest_user', user.username);
-          localStorage.setItem('topicnest_user_id', token);
-          router.push('/forum');
-        }
+        // Store user data and redirect
+        localStorage.setItem('topicnest_user', user.username);
+        localStorage.setItem('topicnest_user_id', token);
+        router.push('/forum');
       } catch (err: any) {
         console.error('Auth error:', err);
         setError(err.message || 'Failed to authenticate. Please try again.');
@@ -159,79 +149,17 @@ export default function LandingPage() {
           </span>
         </div>
 
-        {/* Tab Toggle for Login/Signup */}
-        <div style={{
-          display: 'flex',
-          background: '#f3f4f6',
-          borderRadius: '12px',
-          padding: '4px',
-          marginTop: '12px',
-          marginBottom: '24px'
-        }}>
-          {/* Login Tab */}
-          <button
-            type="button"
-            onClick={() => {
-              setIsLogin(true);
-              setError('');
-              setSuccessMsg('');
-            }}
-            style={{
-              flex: 1,
-              padding: '12px',
-              fontSize: '15px',
-              fontWeight: '600',
-              color: isLogin ? '#ffffff' : '#6b7280',
-              background: isLogin ? 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)' : 'transparent',
-              border: 'none',
-              borderRadius: '10px',
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-              boxShadow: isLogin ? '0 2px 8px rgba(139, 92, 246, 0.3)' : 'none'
-            }}
-          >
-            Sign In
-          </button>
-
-          {/* Signup Tab */}
-          <button
-            type="button"
-            onClick={() => {
-              setIsLogin(false);
-              setError('');
-              setSuccessMsg('');
-            }}
-            style={{
-              flex: 1,
-              padding: '12px',
-              fontSize: '15px',
-              fontWeight: '600',
-              color: !isLogin ? '#ffffff' : '#6b7280',
-              background: !isLogin ? 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)' : 'transparent',
-              border: 'none',
-              borderRadius: '10px',
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-              boxShadow: !isLogin ? '0 2px 8px rgba(139, 92, 246, 0.3)' : 'none'
-            }}
-          >
-            Sign Up
-          </button>
-        </div>
-
-        {/* Tagline - changes based on mode */}
+        {/* Tagline */}
         <p
           className="text-center"
           style={{
             color: '#6b7280',
             fontSize: '15px',
             marginBottom: '24px',
-            minHeight: '40px'
+            marginTop: '12px'
           }}
         >
-          {isLogin
-            ? '👋 Welcome back! Enter your username to continue.'
-            : '🚀 Choose a username to get started!'}
+          🚀 Enter a username to get started!
         </p>
 
         {/* Form */}
@@ -298,25 +226,7 @@ export default function LandingPage() {
             </div>
           )}
 
-          {/* Success Message Alert */}
-          {successMsg && (
-            <div
-              style={{
-                background: '#dcfce7',
-                color: '#166534',
-                padding: '12px 16px',
-                borderRadius: '12px',
-                fontSize: '14px',
-                marginBottom: '20px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}
-            >
-              <span>✅</span>
-              {successMsg}
-            </div>
-          )}
+
 
           {/* Submit Button */}
           <button
@@ -360,10 +270,10 @@ export default function LandingPage() {
                   <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
                   <path d="M12 2a10 10 0 0 1 10 10" strokeOpacity="1" />
                 </svg>
-                {isLogin ? 'Signing in...' : 'Creating account...'}
+                Entering...
               </span>
             ) : (
-              isLogin ? '🔐 Sign In to Your Account' : '✨ Create Your Account'
+              '✨ Enter TopicNest'
             )}
           </button>
         </form>
