@@ -21,6 +21,11 @@ TopicNest is a modern, high performance community forum which features a sleek, 
 - **Activity Dashboard** - View total count of posts, comments, and interactions.
 - **Content History** - Access a complete history of posted contents and bookmarked items.
 
+### Authentication
+- **Username-Only Login** - Simple, streamlined authentication using just a username.
+- **Auto-Registration** - New users are automatically created when they enter a username for the first time.
+- **Session Persistence** - User sessions are stored locally for seamless return visits.
+
 ---
 
 ## 🚀 Technology Stack
