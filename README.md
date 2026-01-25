@@ -78,6 +78,9 @@ cd topicnest
 cd backend
 cp .env.example .env
 # Update DATABASE_URL in .env with your Supabase connection string
+
+# Install dependencies and start server
+go mod tidy
 go run .
 ```
 
