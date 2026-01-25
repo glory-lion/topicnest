@@ -38,10 +38,20 @@ export default function LandingPage() {
           body: JSON.stringify({ username: username.trim(), password: password.trim() }),
         });
 
-        const data = await response.json();
+        const text = await response.text();
+        console.log('Response status:', response.status);
+        console.log('Response body:', text);
+
+        let data;
+        try {
+          data = JSON.parse(text);
+        } catch (e) {
+          // If the response isn't JSON (e.g. 404 Not Found), throw the raw text
+          throw new Error(text.length < 100 ? text : `Server Error (${response.status})`);
+        }
 
         if (!response.ok) {
-          throw new Error(data.error || 'Authentication failed');
+          throw new Error(data.error || text || 'Authentication failed');
         }
 
         // Store user data
