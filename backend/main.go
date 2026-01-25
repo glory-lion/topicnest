@@ -76,12 +76,12 @@ func main() {
 	api.HandleFunc("/bookmarks", handlers.RemoveBookmark).Methods("DELETE", "OPTIONS")
 	api.HandleFunc("/bookmarks/check", handlers.IsPostBookmarked).Methods("GET", "OPTIONS")
 
-	// Setup CORS - allow all origins for development
+	// Setup CORS - allow all origins
 	c := cors.New(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:3000", "http://127.0.0.1:3000", "*"},
+		AllowedOrigins:   []string{"*"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Authorization", "Content-Type", "X-Requested-With"},
-		AllowCredentials: true,
+		AllowCredentials: false,
 	})
 
 	handler := c.Handler(r)
