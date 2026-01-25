@@ -2,7 +2,26 @@
 
 TopicNest is a modern, high performance community forum application which features a sleek, responsive interface for real time discussions, user profiles, and category based post management.
 
-## 🚀 Technlogy Stack
+## ✨ Features
+
+### Community & Content
+- **Topic-Based Discussions** - Users can create posts within specific topics.
+- **Rich Media** - Users can upload photos to posts and set profile pictures.
+- **Interactive Comments** - Each post has a dedicated comment section for discussions.
+
+### User Interaction
+- **Engagement** - Users can like both posts and comments.
+- **Content Control** - Full edit and delete capabilities for user's own posts and comments.
+- **Bookmarks** - Users can bookmark posts and comments for easy access later.
+- **Search** - Integrated search bar to find relevant content.
+
+### Profile Manager
+- **Activity Dashboard** - View total count of posts, comments, and interactions.
+- **Content History** - Access a complete history of posted contents and bookmarked items.
+
+---
+
+## 🚀 Technology Stack
 - **Frontend**: Next.js 16 (App Router), React 19, Tailwind CSS (for modern UI components)
 - **Backend**: Go (Golang) 1.24, Gorilla Mux
 - **Database**: PostgreSQL (Supabase)
@@ -11,68 +30,66 @@ TopicNest is a modern, high performance community forum application which featur
 ---
 
 ## 🛠️ Project Structure
-- `/src`: Frontend React components and Next.js pages.
-- `/backend`: Go API server handling business logic and database interactions.
-- `supabase-schema.sql`: Database schema definition for PostgreSQL.
+
+```
+topicnest/
+├── backend/
+│   ├── handlers/    # Business logic & request handlers
+│   ├── middleware/  # HTTP middleware (CORS, logging)
+│   ├── models/      # Data definitions and structs
+│   ├── db/          # Database connection
+│   └── main.go      # Backend server entry point
+├── src/
+│   ├── app/
+│   │   ├── create/      # Post creation page
+│   │   ├── forum/       # Forum listing views
+│   │   ├── profile/     # User profile management
+│   │   ├── search/      # Search functionality
+│   │   ├── topic/       # Topic-based post filtering
+│   │   ├── layout.tsx   # Root application layout
+│   │   └── page.tsx     # Landing page
+│   ├── components/  # Shared components (Header, Modals)
+│   └── lib/         # API clients and utilities
+├── supabase-schema.sql  # Database structure
+└── README.md
+```
 
 ---
 
-## 🏃 Setup Instructions
+## ⚡️ Installation
 
-Follow these steps to get TopicNest running locally.
+1. Clone the repository:
 
-### 1. Prerequisites
-- **Node.js** (v20 or higher)
-- **Go** (v1.24 or higher)
-- A **PostgreSQL** database (Supabase is recommended for easy setup)
+```bash
+git clone https://github.com/glory-lion/topicnest.git
+cd topicnest
+```
 
-### 2. Database Setup
-1. Create a new PostgreSQL database (e.g., on [Supabase](https://supabase.com)).
-2. Execute the contents of `supabase-schema.sql` (found in the root directory) in your SQL editor to create the necessary tables and initial data.
-3. **Important (Supabase Users)**: If you encounter permission errors (403 or 401), run the scripts in `fix-rls-policies.sql` to ensure the application has the necessary permissions to read/write data.
+2. Database Setup:
 
-### 3. Backend Configuration
-1. Navigate to the backend directory:
-   ```bash
-   cd backend
-   ```
-2. Set the `DATABASE_URL` environment variable. Ensure it includes the `default_query_exec_mode=simple_protocol` parameter for compatibility with connection poolers (like Supavisor):
-   ```bash
-   export DATABASE_URL="postgres://postgres.[USER]:[PASSWORD]@aws-1-ap-southeast-1.pooler.supabase.com:6543/postgres?sslmode=require&default_query_exec_mode=simple_protocol"
-   ```
-3. Run the backend server:
-   ```bash
-   go run .
-   ```
-   The API will be available at `http://localhost:8080/api`.
+- Create a project on [Supabase](https://supabase.com).
+- Copy the contents of `supabase-schema.sql` and run them in the Supabase SQL Editor.
 
+3. Backend Configuration:
 
+```bash
+cd backend
+cp .env.example .env
+# Update DATABASE_URL in .env with your Supabase connection string
+go run .
+```
 
-### 4. Frontend Configuration
-1. Open a new terminal in the root directory.
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-3. (Optional) Create a `.env.local` file if you want to change the API URL:
-   ```env
-   NEXT_PUBLIC_API_URL=http://localhost:8080/api
-   ```
-4. Run the development server:
-   ```bash
-   npm run dev
-   ```
-5. Open [http://localhost:3000](http://localhost:3000) in your browser.
+4. Frontend Configuration:
 
----
+```bash
+# Open a new terminal in the project root
+npm install
+npm run dev
+```
 
-## ✨ Features for Grading
-- **User Authentication**: Simple username-based login.
-- **Dynamic Feed**: Real-time listing of posts with pagination (by category or user).
-- **Advanced Search**: Search for posts, topics (categories), or people using the centralized search bar.
-- **Profile Management**: Customizable user bios and avatars.
-- **Engagement**: Create posts, leave comments, and upvote content.
-- **Responsive Design**: Fully optimized for both desktop and mobile viewing.
+5. Access the App:
+
+Open [http://localhost:3000](http://localhost:3000) to view the application.
 
 ---
 
