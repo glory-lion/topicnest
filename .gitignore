@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Go & Logs
+*.log
+backend/topicnest-server
+backend/tmp/
+backend/scripts/

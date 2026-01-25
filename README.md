@@ -6,8 +6,10 @@ TopicNest is a modern, high performance community forum which features a sleek, 
 
 ### Community & Content
 - **Topic-Based Discussions** - Users can create posts within specific topics.
+- **Create Custom Topics** - Users can create new discussion topics with custom names, descriptions, and icons.
 - **Rich Media** - Users can upload photos to posts and set profile pictures.
 - **Interactive Comments** - Each post has a dedicated comment section for discussions.
+
 
 ### User Interaction
 - **Engagement** - Users can like both posts and comments.

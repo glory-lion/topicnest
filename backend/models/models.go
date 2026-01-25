@@ -4,11 +4,12 @@ import "time"
 
 // User represents a forum user
 type User struct {
-	ID        string    `json:"id"`
-	Username  string    `json:"username"`
-	Bio       *string   `json:"bio,omitempty"`
-	AvatarURL *string   `json:"avatar_url,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
+	ID           string    `json:"id"`
+	Username     string    `json:"username"`
+	PasswordHash *string   `json:"-"` // Never send to frontend
+	Bio          *string   `json:"bio,omitempty"`
+	AvatarURL    *string   `json:"avatar_url,omitempty"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 // Category represents a forum category/topic
@@ -75,6 +76,7 @@ type Bookmark struct {
 // LoginRequest represents a login request body
 type LoginRequest struct {
 	Username string `json:"username"`
+	Password string `json:"password"`
 }
 
 // LoginResponse represents a login response

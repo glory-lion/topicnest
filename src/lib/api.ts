@@ -170,6 +170,30 @@ export async function getCategoryBySlug(slug: string): Promise<Category> {
   return fetchAPI<Category>(`/categories/slug/${slug}`);
 }
 
+export async function createCategory(
+  name: string,
+  description?: string,
+  icon?: string,
+  gradient?: string,
+  glowColor?: string
+): Promise<Category> {
+  return fetchAPI<Category>('/categories', {
+    method: 'POST',
+    body: JSON.stringify({
+      name,
+      description,
+      icon,
+      gradient,
+      glow_color: glowColor
+    }),
+  });
+}
+
+export async function deleteCategory(categoryId: string): Promise<void> {
+  await fetchAPI(`/categories/${categoryId}`, { method: 'DELETE' });
+}
+
+
 // ============ POST FUNCTIONS ============
 
 export async function getPosts(categoryId?: string): Promise<Post[]> {

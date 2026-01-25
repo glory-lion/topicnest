@@ -2,9 +2,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { getCategories, Category } from '@/lib/api';
+import { getCategories, deleteCategory, Category } from '@/lib/api';
 
 import Header from '@/components/Header';
+import CreateTopicModal from '@/components/CreateTopicModal';
+import { TopicIcons } from '@/lib/topicIcons';
+
+
 
 // Icon components for categories (since we can't store React in DB)
 const categoryIcons: { [key: string]: React.ReactNode } = {
@@ -75,7 +79,9 @@ export default function ForumPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [isMobile, setIsMobile] = useState(false);
     const [isTablet, setIsTablet] = useState(false);
+    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const router = useRouter();
+
 
     // Check screen size on mount and resize
     useEffect(() => {
@@ -106,6 +112,27 @@ export default function ForumPage() {
             console.error('Error loading categories:', error);
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const handleDeleteCategory = async (e: React.MouseEvent, categoryId: string, slug: string) => {
+        e.stopPropagation();
+
+        // Prevent deleting default categories
+        const defaultCategories = ['technology', 'gaming', 'art-design', 'books', 'music', 'movies-tv', 'health'];
+        if (defaultCategories.includes(slug)) {
+            alert("You cannot delete default topics.");
+            return;
+        }
+
+        if (window.confirm('Are you sure you want to delete this topic? This action cannot be undone.')) {
+            try {
+                await deleteCategory(categoryId);
+                await loadCategories(); // Refresh list
+            } catch (error) {
+                console.error('Error deleting category:', error);
+                alert('Failed to delete topic');
+            }
         }
     };
 
@@ -221,12 +248,45 @@ export default function ForumPage() {
                         color: '#64748b',
                         fontSize: isMobile ? '15px' : '18px',
                         maxWidth: '400px',
-                        margin: '0 auto',
+                        margin: '0 auto 24px',
                         padding: isMobile ? '0 16px' : '0'
                     }}>
                         Choose a category to join the discussion and connect with others
                     </p>
+                    <button
+                        onClick={() => setIsCreateModalOpen(true)}
+                        style={{
+                            padding: isMobile ? '10px 20px' : '12px 28px',
+                            borderRadius: '12px',
+                            border: 'none',
+                            background: 'linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%)',
+                            color: '#fff',
+                            fontSize: '15px',
+                            fontWeight: '600',
+                            cursor: 'pointer',
+                            boxShadow: '0 4px 12px rgba(139, 92, 246, 0.3)',
+                            transition: 'all 0.2s',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '8px'
+                        }}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.style.transform = 'translateY(-2px)';
+                            e.currentTarget.style.boxShadow = '0 8px 20px rgba(139, 92, 246, 0.4)';
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.transform = 'translateY(0)';
+                            e.currentTarget.style.boxShadow = '0 4px 12px rgba(139, 92, 246, 0.3)';
+                        }}
+                    >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="12" y1="5" x2="12" y2="19" />
+                            <line x1="5" y1="12" x2="19" y2="12" />
+                        </svg>
+                        Create Topic
+                    </button>
                 </div>
+
 
                 {/* Topics Grid */}
                 <div
@@ -282,9 +342,51 @@ export default function ForumPage() {
                                             ? `0 30px 60px rgba(139, 92, 246, 0.2), 0 0 0 1px rgba(139, 92, 246, 0.1)`
                                             : '0 8px 32px rgba(0, 0, 0, 0.06), 0 0 0 1px rgba(139, 92, 246, 0.05)',
                                         border: '1px solid rgba(139, 92, 246, 0.1)',
-                                        animation: `fadeInUp 0.6s ease ${index * 0.1}s both`
+                                        animation: `fadeInUp 0.6s ease ${index * 0.1}s both`,
+                                        position: 'relative'
                                     }}
                                 >
+                                    {/* Delete Button (only for user-created topics) */}
+                                    {!['technology', 'gaming', 'art-design', 'books', 'music', 'movies-tv', 'health'].includes(category.slug) && (
+                                        <button
+                                            onClick={(e) => handleDeleteCategory(e, category.id, category.slug)}
+                                            style={{
+                                                position: 'absolute',
+                                                top: isMobile ? '10px' : '20px',
+                                                right: isMobile ? '10px' : '20px',
+                                                background: 'rgba(239, 68, 68, 0.1)',
+                                                color: '#ef4444',
+                                                border: 'none',
+                                                borderRadius: '50%',
+                                                width: '32px',
+                                                height: '32px',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                cursor: 'pointer',
+                                                opacity: 1,
+                                                transition: 'all 0.2s',
+                                                zIndex: 10
+                                            }}
+                                            title="Delete topic"
+                                            onMouseEnter={(e) => {
+                                                e.currentTarget.style.background = '#ef4444';
+                                                e.currentTarget.style.color = 'white';
+                                                e.currentTarget.style.transform = 'scale(1.1)';
+                                            }}
+                                            onMouseLeave={(e) => {
+                                                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
+                                                e.currentTarget.style.color = '#ef4444';
+                                                e.currentTarget.style.transform = 'scale(1)';
+                                            }}
+                                        >
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <polyline points="3 6 5 6 21 6"></polyline>
+                                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                            </svg>
+                                        </button>
+                                    )}
+
                                     {/* Icon */}
                                     <div
                                         style={{
@@ -301,11 +403,21 @@ export default function ForumPage() {
                                             transform: hoveredTopic === category.id ? 'scale(1.15) rotate(5deg)' : 'scale(1) rotate(0deg)',
                                             boxShadow: hoveredTopic === category.id
                                                 ? `0 20px 40px ${glowColor}`
-                                                : `0 10px 30px ${glowColor.replace('0.5', '0.2')}`
+                                                : `0 10px 30px ${glowColor.replace('0.5', '0.2')}`,
+                                            fontSize: '28px'
                                         }}
                                     >
-                                        {icon}
+                                        {/* Check if it's a TopicIcon key first, then fall back to slug-based SVG icons */}
+                                        {category.icon && TopicIcons[category.icon] ? (
+                                            TopicIcons[category.icon]
+                                        ) : categoryIcons[category.slug] ? (
+                                            icon
+                                        ) : (
+                                            TopicIcons['folder'] || icon
+                                        )}
                                     </div>
+
+
 
                                     {/* Title */}
                                     <h3
@@ -374,7 +486,17 @@ export default function ForumPage() {
                 </div>
             </main>
 
+            {/* Create Topic Modal */}
+            <CreateTopicModal
+                isOpen={isCreateModalOpen}
+                onClose={() => setIsCreateModalOpen(false)}
+                onSuccess={() => {
+                    loadCategories();
+                }}
+            />
+
             {/* Animation Keyframes */}
+
             <style jsx global>{`
                 @keyframes fadeInUp {
                     from {

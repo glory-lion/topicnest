@@ -2,30 +2,64 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getOrCreateUser } from '@/lib/api';
 
 export default function LandingPage() {
   const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [isLogin, setIsLogin] = useState(true); // true = login, false = signup
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
   const router = useRouter();
 
-  const handleEnterForum = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (username.trim()) {
+    if (username.trim() && password.trim()) {
+      // Password length check for signup
+      if (!isLogin && password.trim().length < 6) {
+        setError('Password must be at least 6 characters long');
+        return;
+      }
+
       setIsLoading(true);
       setError('');
+      setSuccessMsg('');
 
       try {
-        const user = await getOrCreateUser(username.trim());
-        if (user) {
-          localStorage.setItem('topicnest_user', username.trim());
-          localStorage.setItem('topicnest_user_id', user.id);
-          router.push('/forum');
+        const endpoint = isLogin ? '/api/auth/login' : '/api/users';
+        const response = await fetch(`http://localhost:8080${endpoint}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: username.trim(), password: password.trim() }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Authentication failed');
         }
-      } catch (err) {
-        console.error('Login error:', err);
-        setError('Failed to login. Please try again.');
+
+        // Store user data
+        const user = data.user || data;
+        const token = data.token || user.id;
+
+        if (isLogin) {
+          // Store user data and redirect only if logging in
+          localStorage.setItem('topicnest_user', user.username);
+          localStorage.setItem('topicnest_user_id', token);
+          router.push('/forum');
+        } else {
+          // Signup successful - Switch to login view and show message
+          setIsLogin(true);
+          setPassword(''); // Clear password so they have to type it again (security/ux)
+          setUsername(user.username || username); // Pre-fill username for convenience
+          setSuccessMsg('✨ Account created! Please sign in with your new credentials.');
+          setIsLoading(false);
+          return;
+        }
+      } catch (err: any) {
+        console.error('Auth error:', err);
+        setError(err.message || 'Failed to authenticate. Please try again.');
         setIsLoading(false);
       }
     }
@@ -49,23 +83,24 @@ export default function LandingPage() {
         }}
       >
         {/* Logo Section - centered */}
-        <div className="flex items-center justify-center gap-3 mb-24">
+        <div className="flex items-center justify-center gap-4 mb-12" style={{ marginBottom: '15px' }}>
           {/* Icon */}
           <div
             style={{
-              width: '48px',
-              height: '48px',
-              background: 'linear-gradient(135deg, #7c3aed 0%, #8b5cf6 100%)',
+              width: '42px',
+              height: '42px',
+              background: 'linear-gradient(135deg, #c084fc 0%, #d946ef 100%)',
               borderRadius: '12px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
+              boxShadow: '0 8px 20px -5px rgba(192, 132, 252, 0.4)',
               flexShrink: 0
             }}
           >
             <svg
-              width="24"
-              height="24"
+              width="20"
+              height="20"
               viewBox="0 0 24 24"
               fill="none"
               stroke="white"
@@ -80,35 +115,124 @@ export default function LandingPage() {
           {/* Brand Name */}
           <span
             style={{
-              fontSize: '26px',
-              fontWeight: '700',
-              background: 'linear-gradient(135deg, #7c3aed 0%, #8b5cf6 100%)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text',
-              paddingRight: '6px'
+              fontSize: '28px',
+              fontWeight: '800',
+              display: 'flex',
+              alignItems: 'center',
+              letterSpacing: '-0.02em',
+              lineHeight: '1.4',
+              padding: '8px 0'
             }}
           >
-            Topic<em style={{ fontStyle: 'italic', paddingRight: '2px' }}>Nest</em>
+            <span
+              style={{
+                background: 'linear-gradient(90deg, #a855f7 0%, #e879f9 100%)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
+                paddingLeft: '2px',
+                paddingRight: '1px',
+                paddingBottom: '2px'
+              }}
+            >
+              Topic
+            </span>
+            <span
+              style={{
+                background: 'linear-gradient(90deg, #ef4444 0%, #f97316 100%)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
+                fontStyle: 'italic',
+                paddingBottom: '2px',
+                paddingRight: '2px'
+              }}
+            >
+              Nest
+            </span>
           </span>
         </div>
 
-        {/* Tagline */}
+        {/* Tab Toggle for Login/Signup */}
+        <div style={{
+          display: 'flex',
+          background: '#f3f4f6',
+          borderRadius: '12px',
+          padding: '4px',
+          marginTop: '12px',
+          marginBottom: '24px'
+        }}>
+          {/* Login Tab */}
+          <button
+            type="button"
+            onClick={() => {
+              setIsLogin(true);
+              setError('');
+              setSuccessMsg('');
+              setPassword('');
+            }}
+            style={{
+              flex: 1,
+              padding: '12px',
+              fontSize: '15px',
+              fontWeight: '600',
+              color: isLogin ? '#ffffff' : '#6b7280',
+              background: isLogin ? 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)' : 'transparent',
+              border: 'none',
+              borderRadius: '10px',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              boxShadow: isLogin ? '0 2px 8px rgba(139, 92, 246, 0.3)' : 'none'
+            }}
+          >
+            Sign In
+          </button>
+
+          {/* Signup Tab */}
+          <button
+            type="button"
+            onClick={() => {
+              setIsLogin(false);
+              setError('');
+              setSuccessMsg('');
+              setPassword('');
+            }}
+            style={{
+              flex: 1,
+              padding: '12px',
+              fontSize: '15px',
+              fontWeight: '600',
+              color: !isLogin ? '#ffffff' : '#6b7280',
+              background: !isLogin ? 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)' : 'transparent',
+              border: 'none',
+              borderRadius: '10px',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              boxShadow: !isLogin ? '0 2px 8px rgba(139, 92, 246, 0.3)' : 'none'
+            }}
+          >
+            Sign Up
+          </button>
+        </div>
+
+        {/* Tagline - changes based on mode */}
         <p
           className="text-center"
           style={{
             color: '#6b7280',
-            fontSize: '17px',
-            marginBottom: '10px',
-            marginTop: '20px'
+            fontSize: '15px',
+            marginBottom: '24px',
+            minHeight: '40px'
           }}
         >
-          Join the conversation. Share your thoughts.
+          {isLogin
+            ? '👋 Welcome back! Enter your credentials to continue.'
+            : '🚀 Create your account and join the conversation!'}
         </p>
 
         {/* Form */}
-        <form onSubmit={handleEnterForum}>
-          {/* Username Label */}
+        <form onSubmit={handleSubmit}>
+          {/* Username Field */}
           <label
             htmlFor="username"
             style={{
@@ -122,14 +246,13 @@ export default function LandingPage() {
             Username
           </label>
 
-          {/* Username Input */}
           <input
             id="username"
             type="text"
             placeholder="Enter your username"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            autoComplete="off"
+            autoComplete="username"
             autoFocus
             style={{
               width: '100%',
@@ -140,7 +263,7 @@ export default function LandingPage() {
               border: '1.5px solid #e5e7eb',
               borderRadius: '14px',
               outline: 'none',
-              marginBottom: '28px',
+              marginBottom: '20px',
               transition: 'border-color 0.2s, box-shadow 0.2s'
             }}
             onFocus={(e) => {
@@ -153,10 +276,100 @@ export default function LandingPage() {
             }}
           />
 
-          {/* Enter Button */}
+          {/* Password Field */}
+          <label
+            htmlFor="password"
+            style={{
+              display: 'block',
+              color: '#1f2937',
+              fontSize: '15px',
+              fontWeight: '600',
+              marginBottom: '12px'
+            }}
+          >
+            Password
+          </label>
+
+          <input
+            id="password"
+            type="password"
+            placeholder={isLogin ? "Enter your password" : "Create a password"}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete={isLogin ? "current-password" : "new-password"}
+            style={{
+              width: '100%',
+              padding: '16px 20px',
+              fontSize: '15px',
+              color: '#374151',
+              background: '#ffffff',
+              border: '1.5px solid #e5e7eb',
+              borderRadius: '14px',
+              outline: 'none',
+              marginBottom: '8px',
+              transition: 'border-color 0.2s, box-shadow 0.2s'
+            }}
+            onFocus={(e) => {
+              e.target.style.borderColor = '#8b5cf6';
+              e.target.style.boxShadow = '0 0 0 4px rgba(139, 92, 246, 0.1)';
+            }}
+            onBlur={(e) => {
+              e.target.style.borderColor = '#e5e7eb';
+              e.target.style.boxShadow = 'none';
+            }}
+          />
+
+          {/* Password hint for signup */}
+          {!isLogin && (
+            <p style={{
+              fontSize: '13px',
+              color: '#6b7280',
+              marginBottom: '16px',
+              marginTop: '4px'
+            }}>
+              💡 Choose a strong password (at least 6 characters)
+            </p>
+          )}
+
+          {/* Error Message */}
+          {error && (
+            <div style={{
+              backgroundColor: '#fee2e2',
+              border: '1px solid #fecaca',
+              color: '#991b1b',
+              padding: '12px 16px',
+              borderRadius: '8px',
+              fontSize: '14px',
+              marginBottom: '16px'
+            }}>
+              {error}
+            </div>
+          )}
+
+          {/* Success Message Alert */}
+          {successMsg && (
+            <div
+              style={{
+                background: '#dcfce7',
+                color: '#166534',
+                padding: '12px 16px',
+                borderRadius: '12px',
+                fontSize: '14px',
+                marginBottom: '20px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+            >
+              <span>✅</span>
+              {successMsg}
+            </div>
+          )}
+
+          {/* Submit Button */}
           <button
             type="submit"
-            disabled={!username.trim() || isLoading}
+            disabled={!username.trim() || !password.trim() || isLoading}
             style={{
               width: '100%',
               padding: '18px 28px',
@@ -166,12 +379,13 @@ export default function LandingPage() {
               background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%)',
               border: 'none',
               borderRadius: '14px',
-              cursor: (!username.trim() || isLoading) ? 'not-allowed' : 'pointer',
-              opacity: (!username.trim() || isLoading) ? 0.7 : 1,
-              transition: 'transform 0.2s, box-shadow 0.2s'
+              cursor: (!username.trim() || !password.trim() || isLoading) ? 'not-allowed' : 'pointer',
+              opacity: (!username.trim() || !password.trim() || isLoading) ? 0.7 : 1,
+              transition: 'transform 0.2s, box-shadow 0.2s',
+              marginBottom: '16px'
             }}
             onMouseEnter={(e) => {
-              if (username.trim() && !isLoading) {
+              if (username.trim() && password.trim() && !isLoading) {
                 e.currentTarget.style.transform = 'translateY(-2px)';
                 e.currentTarget.style.boxShadow = '0 10px 30px rgba(139, 92, 246, 0.4)';
               }
@@ -194,14 +408,14 @@ export default function LandingPage() {
                   <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
                   <path d="M12 2a10 10 0 0 1 10 10" strokeOpacity="1" />
                 </svg>
-                Entering...
+                {isLogin ? 'Signing in...' : 'Creating account...'}
               </span>
             ) : (
-              'Enter Forum'
+              isLogin ? '🔐 Sign In to Your Account' : '✨ Create Your Account'
             )}
           </button>
         </form>
-      </div>
-    </div>
+      </div >
+    </div >
   );
 }

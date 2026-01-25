@@ -50,6 +50,8 @@ func main() {
 
 	// ============ CATEGORY ROUTES ============
 	api.HandleFunc("/categories", handlers.GetCategories).Methods("GET", "OPTIONS")
+	api.HandleFunc("/categories", handlers.CreateCategory).Methods("POST", "OPTIONS")
+	api.HandleFunc("/categories/{id}", handlers.DeleteCategory).Methods("DELETE", "OPTIONS")
 	api.HandleFunc("/categories/{id}", handlers.GetCategoryByID).Methods("GET", "OPTIONS")
 	api.HandleFunc("/categories/slug/{slug}", handlers.GetCategoryBySlug).Methods("GET", "OPTIONS")
 
