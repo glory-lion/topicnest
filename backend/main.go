@@ -29,6 +29,24 @@ func main() {
 	// Create router
 	r := mux.NewRouter()
 
+	// Root route for health check / verification
+	r.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("TopicNest Backend API is Running 🚀"))
+	})
+	r.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	})
+
+	// Logging Middleware
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			log.Printf("Requests: %s %s", r.Method, r.URL.Path)
+			next.ServeHTTP(w, r)
+		})
+	})
+
 	// API routes
 	api := r.PathPrefix("/api").Subrouter()
 
