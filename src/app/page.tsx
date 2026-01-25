@@ -27,8 +27,12 @@ export default function LandingPage() {
 
       try {
         const endpoint = isLogin ? '/api/auth/login' : '/api/users';
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
-        const response = await fetch(`${apiUrl}${endpoint}`, {
+        const envUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+        const apiUrl = envUrl.trim().replace(/\/$/, ''); // Remove whitespace and trailing slash
+        const fullUrl = `${apiUrl}${endpoint}`;
+        console.log('Attempting auth request to:', fullUrl);
+
+        const response = await fetch(fullUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ username: username.trim(), password: password.trim() }),
