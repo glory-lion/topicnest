@@ -1,6 +1,6 @@
 # TopicNest 🦅
 
-TopicNest is a modern, high performance community forum application which features a sleek, responsive interface for real time discussions, user profiles, and category based post management.
+TopicNest is a modern, high performance community forum which features a sleek, responsive interface for real time discussions, user profiles, and category based post management.
 
 ## ✨ Features
 
