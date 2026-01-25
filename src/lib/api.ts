@@ -1,10 +1,8 @@
 // API Client for Go Backend
 // This file provides functions to communicate with the Go backend API
 
-// Construct API_BASE_URL robustly
-const rawBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
-const baseUrl = rawBaseUrl.trim().replace(/\/$/, ''); // Remove trailing slash
-const API_BASE_URL = baseUrl.endsWith('/api') ? baseUrl : `${baseUrl}/api`;
+// Hardcoded API URL for production
+const API_BASE_URL = 'https://topicnest-production.up.railway.app/api';
 
 // ============ HELPER FUNCTIONS ============
 

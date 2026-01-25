@@ -18,8 +18,7 @@ export default function LandingPage() {
 
       try {
         const endpoint = '/api/users'; // This handles both new and existing users
-        const envUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
-        const apiUrl = envUrl.trim().replace(/\/$/, ''); // Remove whitespace and trailing slash
+        const apiUrl = 'https://topicnest-production.up.railway.app';
         const fullUrl = `${apiUrl}${endpoint}`;
         console.log('Attempting auth request to:', fullUrl);
 
