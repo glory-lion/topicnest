@@ -27,7 +27,8 @@ export default function LandingPage() {
 
       try {
         const endpoint = isLogin ? '/api/auth/login' : '/api/users';
-        const response = await fetch(`http://localhost:8080${endpoint}`, {
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+        const response = await fetch(`${apiUrl}${endpoint}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ username: username.trim(), password: password.trim() }),
