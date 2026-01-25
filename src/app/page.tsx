@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 
 export default function LandingPage() {
   const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
   const [isLogin, setIsLogin] = useState(true); // true = login, false = signup
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -14,12 +13,7 @@ export default function LandingPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (username.trim() && password.trim()) {
-      // Password length check for signup
-      if (!isLogin && password.trim().length < 6) {
-        setError('Password must be at least 6 characters long');
-        return;
-      }
+    if (username.trim()) {
 
       setIsLoading(true);
       setError('');
@@ -35,7 +29,7 @@ export default function LandingPage() {
         const response = await fetch(fullUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: username.trim(), password: password.trim() }),
+          body: JSON.stringify({ username: username.trim() }),
         });
 
         const text = await response.text();
@@ -64,13 +58,10 @@ export default function LandingPage() {
           localStorage.setItem('topicnest_user_id', token);
           router.push('/forum');
         } else {
-          // Signup successful - Switch to login view and show message
-          setIsLogin(true);
-          setPassword(''); // Clear password so they have to type it again (security/ux)
-          setUsername(user.username || username); // Pre-fill username for convenience
-          setSuccessMsg('✨ Account created! Please sign in with your new credentials.');
-          setIsLoading(false);
-          return;
+          // Signup successful - auto login
+          localStorage.setItem('topicnest_user', user.username);
+          localStorage.setItem('topicnest_user_id', token);
+          router.push('/forum');
         }
       } catch (err: any) {
         console.error('Auth error:', err);
@@ -184,7 +175,6 @@ export default function LandingPage() {
               setIsLogin(true);
               setError('');
               setSuccessMsg('');
-              setPassword('');
             }}
             style={{
               flex: 1,
@@ -210,7 +200,6 @@ export default function LandingPage() {
               setIsLogin(false);
               setError('');
               setSuccessMsg('');
-              setPassword('');
             }}
             style={{
               flex: 1,
@@ -241,8 +230,8 @@ export default function LandingPage() {
           }}
         >
           {isLogin
-            ? '👋 Welcome back! Enter your credentials to continue.'
-            : '🚀 Create your account and join the conversation!'}
+            ? '👋 Welcome back! Enter your username to continue.'
+            : '🚀 Choose a username to get started!'}
         </p>
 
         {/* Form */}
@@ -291,60 +280,8 @@ export default function LandingPage() {
             }}
           />
 
-          {/* Password Field */}
-          <label
-            htmlFor="password"
-            style={{
-              display: 'block',
-              color: '#1f2937',
-              fontSize: '15px',
-              fontWeight: '600',
-              marginBottom: '12px'
-            }}
-          >
-            Password
-          </label>
-
-          <input
-            id="password"
-            type="password"
-            placeholder={isLogin ? "Enter your password" : "Create a password"}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete={isLogin ? "current-password" : "new-password"}
-            style={{
-              width: '100%',
-              padding: '16px 20px',
-              fontSize: '15px',
-              color: '#374151',
-              background: '#ffffff',
-              border: '1.5px solid #e5e7eb',
-              borderRadius: '14px',
-              outline: 'none',
-              marginBottom: '8px',
-              transition: 'border-color 0.2s, box-shadow 0.2s'
-            }}
-            onFocus={(e) => {
-              e.target.style.borderColor = '#8b5cf6';
-              e.target.style.boxShadow = '0 0 0 4px rgba(139, 92, 246, 0.1)';
-            }}
-            onBlur={(e) => {
-              e.target.style.borderColor = '#e5e7eb';
-              e.target.style.boxShadow = 'none';
-            }}
-          />
-
-          {/* Password hint for signup */}
-          {!isLogin && (
-            <p style={{
-              fontSize: '13px',
-              color: '#6b7280',
-              marginBottom: '16px',
-              marginTop: '4px'
-            }}>
-              💡 Choose a strong password (at least 6 characters)
-            </p>
-          )}
+          {/* Spacer */}
+          <div style={{ marginBottom: '16px' }} />
 
           {/* Error Message */}
           {error && (
@@ -384,7 +321,7 @@ export default function LandingPage() {
           {/* Submit Button */}
           <button
             type="submit"
-            disabled={!username.trim() || !password.trim() || isLoading}
+            disabled={!username.trim() || isLoading}
             style={{
               width: '100%',
               padding: '18px 28px',
@@ -394,13 +331,13 @@ export default function LandingPage() {
               background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%)',
               border: 'none',
               borderRadius: '14px',
-              cursor: (!username.trim() || !password.trim() || isLoading) ? 'not-allowed' : 'pointer',
-              opacity: (!username.trim() || !password.trim() || isLoading) ? 0.7 : 1,
+              cursor: (!username.trim() || isLoading) ? 'not-allowed' : 'pointer',
+              opacity: (!username.trim() || isLoading) ? 0.7 : 1,
               transition: 'transform 0.2s, box-shadow 0.2s',
               marginBottom: '16px'
             }}
             onMouseEnter={(e) => {
-              if (username.trim() && password.trim() && !isLoading) {
+              if (username.trim() && !isLoading) {
                 e.currentTarget.style.transform = 'translateY(-2px)';
                 e.currentTarget.style.boxShadow = '0 10px 30px rgba(139, 92, 246, 0.4)';
               }

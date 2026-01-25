@@ -9,43 +9,31 @@ import (
 	"topicnest-backend/models"
 
 	"github.com/gorilla/mux"
-	"golang.org/x/crypto/bcrypt"
 )
 
-// Login handles user login with password verification
+// Login handles user login (username only - no password)
 func Login(w http.ResponseWriter, r *http.Request) {
-	var req models.LoginRequest
+	var req struct {
+		Username string `json:"username"`
+	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
-	if req.Username == "" || req.Password == "" {
-		respondError(w, http.StatusBadRequest, "Username and password are required")
+	if req.Username == "" {
+		respondError(w, http.StatusBadRequest, "Username is required")
 		return
 	}
 
 	// Get user by username
 	user, err := getUserByUsername(req.Username)
 	if err != nil {
-		respondError(w, http.StatusUnauthorized, "Invalid username or password")
+		respondError(w, http.StatusUnauthorized, "User not found")
 		return
 	}
 
-	// Check if password_hash exists (backward compatibility for users without passwords)
-	if user.PasswordHash == nil || *user.PasswordHash == "" {
-		respondError(w, http.StatusUnauthorized, "Please set a password for your account")
-		return
-	}
-
-	// Verify password
-	err = bcrypt.CompareHashAndPassword([]byte(*user.PasswordHash), []byte(req.Password))
-	if err != nil {
-		respondError(w, http.StatusUnauthorized, "Invalid username or password")
-		return
-	}
-
-	// Password correct, return user and token
+	// Return user and token
 	respondJSON(w, http.StatusOK, models.LoginResponse{
 		User:  user,
 		Token: user.ID,
@@ -76,40 +64,36 @@ func GetMe(w http.ResponseWriter, r *http.Request) {
 
 // GetOrCreateUser creates a user if not exists (SIGNUP), returns existing user otherwise
 func GetOrCreateUser(w http.ResponseWriter, r *http.Request) {
-	var req models.LoginRequest
+	var req struct {
+		Username string `json:"username"`
+	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
-	if req.Username == "" || req.Password == "" {
-		respondError(w, http.StatusBadRequest, "Username and password are required")
+	if req.Username == "" {
+		respondError(w, http.StatusBadRequest, "Username is required")
 		return
 	}
 
 	// Check if user already exists
-	_, err := getUserByUsername(req.Username)
+	existingUser, err := getUserByUsername(req.Username)
 	if err == nil {
-		// User exists
-		respondError(w, http.StatusConflict, "Username already taken")
+		// User exists - just log them in
+		respondJSON(w, http.StatusOK, models.LoginResponse{
+			User:  existingUser,
+			Token: existingUser.ID,
+		})
 		return
 	}
 
-	// Hash password
-	passwordHash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
-	if err != nil {
-		respondError(w, http.StatusInternalServerError, "Failed to hash password")
-		return
-	}
-
-	passwordHashStr := string(passwordHash)
-
-	// Create new user with password
+	// Create new user (no password)
 	var newUser models.User
 	err = db.DB.QueryRow(`
-		INSERT INTO users (username, password_hash) VALUES ($1, $2)
+		INSERT INTO users (username) VALUES ($1)
 		RETURNING id, username, bio, avatar_url, created_at
-	`, req.Username, passwordHashStr).Scan(&newUser.ID, &newUser.Username, &newUser.Bio, &newUser.AvatarURL, &newUser.CreatedAt)
+	`, req.Username).Scan(&newUser.ID, &newUser.Username, &newUser.Bio, &newUser.AvatarURL, &newUser.CreatedAt)
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "unique") {
 			respondError(w, http.StatusConflict, "Username already taken")
@@ -119,7 +103,7 @@ func GetOrCreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Return user and token (auto-login after signup)
+	// Return user and token
 	respondJSON(w, http.StatusCreated, models.LoginResponse{
 		User:  &newUser,
 		Token: newUser.ID,
