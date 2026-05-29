@@ -1,8 +1,8 @@
 // API Client for Go Backend
 // This file provides functions to communicate with the Go backend API
 
-// Hardcoded API URL for production
-const API_BASE_URL = 'https://topicnest-production.up.railway.app/api';
+// API URL mapped to Next.js API Routes
+const API_BASE_URL = '/api';
 
 // ============ HELPER FUNCTIONS ============
 

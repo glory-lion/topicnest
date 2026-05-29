@@ -643,3 +643,119 @@ export async function createPostWithImage(
     return data;
 }
 
+// ============ CATEGORY MANAGEMENT ============
+
+export async function createCategory(
+    name: string,
+    description?: string,
+    icon?: string,
+    gradient?: string,
+    glowColor?: string
+): Promise<any> {
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    const { data, error } = await (supabase.from('categories') as any)
+        .insert({
+            name,
+            slug,
+            description: description || null,
+            icon: icon || null,
+            gradient: gradient || null,
+            glow_color: glowColor || null
+        })
+        .select()
+        .single();
+
+    if (error) {
+        console.error('Error creating category:', error);
+        throw error;
+    }
+
+    return data;
+}
+
+export async function deleteCategory(categoryId: string): Promise<void> {
+    const { error } = await supabase
+        .from('categories')
+        .delete()
+        .eq('id', categoryId);
+
+    if (error) {
+        console.error('Error deleting category:', error);
+        throw error;
+    }
+}
+
+// ============ TYPE EXPORTS ============
+// These match the interfaces from api.ts for backward compatibility
+
+export interface User {
+    id: string;
+    username: string;
+    bio?: string | null;
+    avatar_url?: string | null;
+    created_at: string;
+}
+
+export interface UserStats extends User {
+    post_count: number;
+    comment_count: number;
+}
+
+export type UserWithStats = UserStats;
+
+export interface Category {
+    id: string;
+    name: string;
+    slug: string;
+    description?: string | null;
+    icon?: string | null;
+    gradient?: string | null;
+    glow_color?: string | null;
+    created_at: string;
+}
+
+export interface Post {
+    id: string;
+    title: string;
+    content: string;
+    image_url?: string | null;
+    category_id: string;
+    user_id: string;
+    upvotes: number;
+    created_at: string;
+    updated_at?: string | null;
+    author?: User | null;
+    category?: Category | null;
+    comment_count?: number;
+    users?: User | null;
+    categories?: Category | null;
+    comments?: Comment[] | null;
+}
+
+export type PostWithRelations = Post;
+
+export interface Comment {
+    id: string;
+    post_id: string;
+    user_id: string;
+    content: string;
+    upvotes: number;
+    created_at: string;
+    updated_at?: string | null;
+    author?: User | null;
+    users?: User | null;
+}
+
+export type CommentWithUser = Comment;
+
+export interface Bookmark {
+    id: string;
+    user_id: string;
+    post_id: string;
+    created_at: string;
+    post?: Post | null;
+    posts?: Post | null;
+}
+
+export type BookmarkWithPost = Bookmark;
+

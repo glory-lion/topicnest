@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { getOrCreateUser } from '@/lib/api';
 
 export default function LandingPage() {
   const [username, setUsername] = useState('');
@@ -17,36 +18,13 @@ export default function LandingPage() {
       setError('');
 
       try {
-        const endpoint = '/api/users'; // This handles both new and existing users
-        const apiUrl = 'https://topicnest-production.up.railway.app';
-        const fullUrl = `${apiUrl}${endpoint}`;
-        console.log('Attempting auth request to:', fullUrl);
+        const res: any = await getOrCreateUser(username.trim());
+        const user = res.user || res;
+        const token = res.token || user.id;
 
-        const response = await fetch(fullUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: username.trim() }),
-        });
-
-        const text = await response.text();
-        console.log('Response status:', response.status);
-        console.log('Response body:', text);
-
-        let data;
-        try {
-          data = JSON.parse(text);
-        } catch (e) {
-          // If the response isn't JSON (e.g. 404 Not Found), throw the raw text
-          throw new Error(text.length < 100 ? text : `Server Error (${response.status})`);
+        if (!user) {
+          throw new Error('Failed to create or find user');
         }
-
-        if (!response.ok) {
-          throw new Error(data.error || text || 'Authentication failed');
-        }
-
-        // Store user data
-        const user = data.user || data;
-        const token = data.token || user.id;
 
         // Store user data and redirect
         localStorage.setItem('topicnest_user', user.username);

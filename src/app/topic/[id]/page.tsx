@@ -85,7 +85,7 @@ export default function TopicPage() {
                     author: post.users?.username || 'Anonymous',
                     time: formatTimeAgo(post.created_at),
                     upvotes: post.upvotes || 0,
-                    comments: post.comment_count || 0
+                    comments: (post as any).comments?.length || post.comment_count || 0
                 }));
                 setPosts(displayPosts);
             }
