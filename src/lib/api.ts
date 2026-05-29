@@ -203,7 +203,7 @@ export async function getPosts(categoryId?: string): Promise<Post[]> {
 }
 
 export async function getPostsByCategory(categorySlug: string): Promise<Post[]> {
-  return fetchAPI<Post[]>(`/posts/category/${categorySlug}`);
+  return fetchAPI<Post[]>(`/categories/slug/${categorySlug}/posts`);
 }
 
 export async function getPostById(postId: string): Promise<Post> {
@@ -211,7 +211,7 @@ export async function getPostById(postId: string): Promise<Post> {
 }
 
 export async function getPostsByUser(userId: string): Promise<Post[]> {
-  return fetchAPI<Post[]>(`/users/${userId}/posts`);
+  return fetchAPI<Post[]>(`/posts?user_id=${userId}`);
 }
 
 export async function createPost(
@@ -270,7 +270,7 @@ export async function upvotePost(postId: string): Promise<Post> {
 
 export async function searchPosts(query: string): Promise<Post[]> {
   if (!query.trim()) return [];
-  return fetchAPI<Post[]>(`/posts/search?q=${encodeURIComponent(query)}`);
+  return fetchAPI<Post[]>(`/search?q=${encodeURIComponent(query)}`);
 }
 
 // ============ COMMENT FUNCTIONS ============
